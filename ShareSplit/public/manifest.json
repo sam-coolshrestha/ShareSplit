@@ -1,0 +1,14 @@
+{
+  "name": "ShareSplit",
+  "short_name": "ShareSplit",
+  "description": "Free, fast expense splitting with UPI support",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#120D07",
+  "theme_color": "#C2621A",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
