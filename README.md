@@ -1,6 +1,6 @@
 # ShareSplit (scaffold)
 
-Repository scaffold for ShareSplit (previously 'FairSplit').
+Repository scaffold for ShareSplit.
 
 Next steps:
 
