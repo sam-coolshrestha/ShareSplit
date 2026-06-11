@@ -10,5 +10,8 @@
 > [PWA] PWA support is disabled
 > [PWA] PWA support is disabled
  ✓ Ready in 3.4s
- ○ Compiling / ...
- ✓ Compiled / in 14.7s (492 modules)
+ ○ Compiling /src/middleware ...
+ ✓ Compiled /src/middleware in 614ms (127 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 4s (822 modules)
+ GET /login 200 in 4234ms
