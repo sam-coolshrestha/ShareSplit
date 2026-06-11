@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const AUTH_ROUTES = ['/login', '/register']
-const PUBLIC_ROUTES = [...AUTH_ROUTES, '/api/auth/callback']
+const PUBLIC_ROUTES = ['/', ...AUTH_ROUTES, '/api/auth/callback']
 
 function matchesRoute(pathname: string, routes: string[]) {
   return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`))

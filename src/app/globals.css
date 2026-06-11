@@ -1,3 +1,102 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  .comic-panel {
+    border: 4px solid #120d07;
+  }
+
+  .comic-button {
+    border: 4px solid #120d07;
+    box-shadow: 7px 7px 0 #f5f0ea;
+    transition:
+      transform 120ms ease,
+      box-shadow 120ms ease;
+  }
+
+  .comic-button:hover {
+    transform: translate(3px, 3px);
+    box-shadow: 4px 4px 0 #f5f0ea;
+  }
+
+  .comic-dark-shadow {
+    box-shadow: 8px 8px 0 #120d07;
+  }
+
+  .comic-orange-shadow {
+    box-shadow: 10px 10px 0 #e07020;
+  }
+
+  .comic-label {
+    border: 3px solid #120d07;
+    box-shadow: 4px 4px 0 #120d07;
+  }
+
+  .comic-burst {
+    clip-path: polygon(
+      50% 0%,
+      61% 30%,
+      88% 12%,
+      75% 40%,
+      100% 50%,
+      72% 61%,
+      88% 88%,
+      60% 75%,
+      50% 100%,
+      39% 72%,
+      12% 88%,
+      25% 60%,
+      0% 50%,
+      29% 39%,
+      12% 12%,
+      40% 27%
+    );
+  }
+
+  .comic-speech {
+    position: relative;
+    border: 4px solid #120d07;
+    box-shadow: 10px 10px 0 #e07020;
+  }
+
+  .comic-speech::before {
+    position: absolute;
+    bottom: -28px;
+    right: 14%;
+    width: 42px;
+    height: 42px;
+    content: '';
+    background: #f5f0ea;
+    border-right: 4px solid #120d07;
+    border-bottom: 4px solid #120d07;
+    transform: rotate(45deg);
+  }
+
+  .comic-tape {
+    position: absolute;
+    z-index: 10;
+    width: 110px;
+    height: 28px;
+    background: rgb(245 240 234 / 45%);
+    border: 1px solid rgb(245 240 234 / 60%);
+  }
+}
+
+@layer utilities {
+  .comic-halftone {
+    background-image: radial-gradient(#e07020 1.5px, transparent 1.5px);
+    background-size: 9px 9px;
+  }
+
+  .comic-halftone-dark {
+    background-image: radial-gradient(#120d07 1.5px, transparent 1.5px);
+    background-size: 9px 9px;
+  }
+
+  .comic-title {
+    text-shadow:
+      4px 4px 0 #120d07,
+      -2px -2px 0 #f5f0ea;
+  }
+}
