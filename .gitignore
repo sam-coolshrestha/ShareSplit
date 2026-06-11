@@ -6,3 +6,4 @@ dist/
 build/
 ShareSplit/node_modules/
 ShareSplit/.next/
+*.log
