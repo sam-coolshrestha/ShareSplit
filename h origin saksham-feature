@@ -1,0 +1,624 @@
+[1mdiff --git a/.codex-dev-server.log b/.codex-dev-server.log[m
+[1mdeleted file mode 100644[m
+[1mindex 2d194af7..00000000[m
+[1m--- a/.codex-dev-server.log[m
+[1m+++ /dev/null[m
+[36m@@ -1,17 +0,0 @@[m
+[31m-[m
+[31m-> sharesplit@0.1.0 dev[m
+[31m-> next dev[m
+[31m-[m
+[31m-  ▲ Next.js 14.2.35[m
+[31m-  - Local:        http://localhost:3000[m
+[31m-  - Environments: .env.local[m
+[31m-[m
+[31m- ✓ Starting...[m
+[31m-> [PWA] PWA support is disabled[m
+[31m-> [PWA] PWA support is disabled[m
+[31m- ✓ Ready in 3.4s[m
+[31m- ○ Compiling /src/middleware ...[m
+[31m- ✓ Compiled /src/middleware in 614ms (127 modules)[m
+[31m- ○ Compiling /login ...[m
+[31m- ✓ Compiled /login in 4s (822 modules)[m
+[31m- GET /login 200 in 4234ms[m
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex 19dba2d4..39b03a3f 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -5,4 +5,5 @@[m [mnode_modules/[m
+ dist/[m
+ build/[m
+ ShareSplit/node_modules/[m
+[31m-ShareSplit/.next/[m
+\ No newline at end of file[m
+[32m+[m[32mShareSplit/.next/[m
+[32m+[m[32m*.log[m
+\ No newline at end of file[m
+[1mdiff --git a/supabase/schema.sql b/supabase/schema.sql[m
+[1mindex 9051af30..d12ce2f8 100644[m
+[1m--- a/supabase/schema.sql[m
+[1m+++ b/supabase/schema.sql[m
+[36m@@ -1,136 +1,490 @@[m
+[31m--- PROFILES (extends auth.users)[m
+[32m+[m[32m-- ShareSplit database schema[m
+[32m+[m
+[32m+[m[32mcreate extension if not exists pgcrypto;[m
+[32m+[m
+[32m+[m[32m-- PROFILES[m
+ create table public.profiles ([m
+[31m-  id uuid references auth.users(id) on delete cascade primary key,[m
+[32m+[m[32m  id uuid primary key references auth.users(id) on delete cascade,[m
+   display_name text not null,[m
+   avatar_url text,[m
+[31m-  created_at timestamptz default now() not null[m
+[32m+[m[32m  created_at timestamptz not null default now()[m
+ );[m
+[31m-alter table public.profiles enable row level security;[m
+[31m-create policy "Users can read all profiles" on public.profiles for select using (true);[m
+[31m-create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id);[m
+[31m-[m
+[31m--- Auto-create profile on signup[m
+[31m-create function public.handle_new_user()[m
+[31m-returns trigger language plpgsql security definer set search_path = public as $$[m
+[31m-begin[m
+[31m-  insert into public.profiles (id, display_name, avatar_url)[m
+[31m-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), new.raw_user_meta_data->>'avatar_url');[m
+[31m-  return new;[m
+[31m-end;[m
+[31m-$$;[m
+[31m-create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();[m
+ [m
+ -- GROUPS[m
+ create table public.groups ([m
+[31m-  id uuid default gen_random_uuid() primary key,[m
+[32m+[m[32m  id uuid primary key default gen_random_uuid(),[m
+   name text not null,[m
+   description text,[m
+[31m-  created_by uuid references public.profiles(id) not null,[m
+[31m-  currency text default 'INR' not null,[m
+[31m-  created_at timestamptz default now() not null[m
+[32m+[m[32m  created_by uuid not null references public.profiles(id),[m
+[32m+[m[32m  currency text not null default 'INR',[m
+[32m+[m[32m  created_at timestamptz not null default now()[m
+ );[m
+[31m-alter table public.groups enable row level security;[m
+ [m
+ -- GROUP MEMBERS[m
+ create table public.group_members ([m
+[31m-  id uuid default gen_random_uuid() primary key,[m
+[31m-  group_id uuid references public.groups(id) on delete cascade not null,[m
+[31m-  user_id uuid references public.profiles(id) on delete cascade not null,[m
+[31m-  role text default 'member' check (role in ('admin', 'member')),[m
+[31m-  joined_at timestamptz default now() not null,[m
+[31m-  unique(group_id, user_id)[m
+[32m+[m[32m  id uuid primary key default gen_random_uuid(),[m
+[32m+[m[32m  group_id uuid not null references public.groups(id) on delete cascade,[m
+[32m+[m[32m  user_id uuid not null references public.profiles(id) on delete cascade,[m
+[32m+[m[32m  role text not null default 'member' check (role in ('admin', 'member')),[m
+[32m+[m[32m  joined_at timestamptz not null default now(),[m
+[32m+[m[32m  unique (group_id, user_id)[m
+ );[m
+[31m-alter table public.group_members enable row level security;[m
+[31m-[m
+[31m--- RLS: group members can see their own groups[m
+[31m-create policy "Members can view their groups" on public.groups for select[m
+[31m-  using (exists (select 1 from public.group_members where group_id = groups.id and user_id = auth.uid()));[m
+[31m-create policy "Members can view group members" on public.group_members for select[m
+[31m-  using (exists (select 1 from public.group_members gm where gm.group_id = group_members.group_id and gm.user_id = auth.uid()));[m
+ [m
+[31m--- FRIENDSHIPS (1-on-1 debt tracking)[m
+[32m+[m[32m-- FRIENDSHIPS[m
+[32m+[m[32m-- user_a must sort before user_b so each friendship has one canonical row.[m
+ create table public.friendships ([m
+[31m-  id uuid default gen_random_uuid() primary key,[m
+[31m-  user_a uuid references public.profiles(id) not null,[m
+[31m-  user_b uuid references public.profiles(id) not null,[m
+[31m-  created_at timestamptz default now() not null,[m
+[31m-  unique(user_a, user_b),[m
+[31m-  check (user_a  0),[m
+[31m-  currency text default 'INR' not null,[m
+[31m-  paid_by uuid references public.profiles(id) not null,[m
+[31m-  group_id uuid references public.groups(id) on delete cascade,[m
+[31m-  friendship_id uuid references public.friendships(id) on delete cascade,[m
+[31m-  split_type text not null check (split_type in ('equal', 'percentage', 'exact', 'itemized')),[m
+[31m-  date date default current_date not null,[m
+[31m-  notes text,[m
+[31m-  created_by uuid references public.profiles(id) not null,[m
+[31m-  created_at timestamptz default now() not null,[m
+[31m-  updated_at timestamptz default now() not null,[m
+[31m-  is_deleted boolean default false not null,[m
+[31m-  check ([m
+[31m-    (group_id is not null and friendship_id is null) or[m
+[31m-    (group_id is null and friendship_id is not null)[m
+[31m-  )[m
+[32m+[m[32m  id uuid primary key default gen_random_uuid(),[m
+[32m+[m[32m  user_a uuid not null references public.profiles(id) on delete cascade,[m
+[32m+[m[32m  user_b uuid not null references public.profiles(id) on delete cascade,[m
+[32m+[m[32m  created_at timestamptz not null default now(),[m
+[32m+[m[32m  unique (user_a, user_b),[m
+[32m+[m[32m  check (user_a < user_b)[m
+ );[m
+[31m-alter table public.expenses enable row level security;[m
+ [m
+ -- EXPENSES[m
+ create table public.expenses ([m
+[31m-  id uuid default gen_random_uuid() primary key,[m
+[32m+[m[32m  id uuid primary key default gen_random_uuid(),[m
+[32m+[m[32m  description text not null,[m
+[32m+[m[32m  amount numeric(12, 2) not null check (amount > 0),[m
+[32m+[m[32m  currency text not null default 'INR',[m
+[32m+[m[32m  paid_by uuid not null references public.profiles(id),[m
+   group_id uuid references public.groups(id) on delete cascade,[m
+[31m-  paid_by uuid references public.profiles(id) not null,[m
+[31m-  amount numeric(12,2) not null check (amount > 0),[m
+[31m-  currency text default 'INR' not null,[m
+[32m+[m[32m  friendship_id uuid references public.friendships(id) on delete cascade,[m
+   split_type text not null check (split_type in ('equal', 'percentage', 'exact', 'itemized')),[m
+[31m-  date date default current_date not null,[m
+[32m+[m[32m  date date not null default current_date,[m
+   notes text,[m
+[31m-  created_by uuid references public.profiles(id) not null,[m
+[31m-  created_at timestamptz default now() not null,[m
+[31m-  updated_at timestamptz default now() not null,[m
+[31m-  is_deleted boolean default false not null[m
+[32m+[m[32m  created_by uuid not null references public.profiles(id),[m
+[32m+[m[32m  created_at timestamptz not null default now(),[m
+[32m+[m[32m  updated_at timestamptz not null default now(),[m
+[32m+[m[32m  is_deleted boolean not null default false,[m
+[32m+[m[32m  check ([m
+[32m+[m[32m    (group_id is not null and friendship_id is null)[m
+[32m+[m[32m    or (group_id is null and friendship_id is not null)[m
+[32m+[m[32m  )[m
+ );[m
+[31m-alter table public.expenses enable row level security;[m
+ [m
+ -- EXPENSE SPLITS[m
+ create table public.expense_splits ([m
+[31m-  id uuid default gen_random_uuid() primary key,[m
+[31m-  expense_id uuid references public.expenses(id) on delete cascade not null,[m
+[31m-  user_id uuid references public.profiles(id) not null,[m
+[31m-  amount numeric(12,2) not null,[m
+[31m-  is_settled boolean default false not null,[m
+[31m-  unique(expense_id, user_id)[m
+[32m+[m[32m  id uuid primary key default gen_random_uuid(),[m
+[32m+[m[32m  expense_id uuid not null references public.expenses(id) on delete cascade,[m
+[32m+[m[32m  user_id uuid not null references public.profiles(id),[m
+[32m+[m[32m  amount numeric(12, 2) not null check (amount >= 0),[m
+[32m+[m[32m  is_settled boolean not null default false,[m
+[32m+[m[32m  unique (expense_id, user_id)[m
+ );[m
+[31m-alter table public.expense_splits enable row level security;[m
+ [m
+[31m--- EXPENSE ITEMS (for itemized split)[m
+[32m+[m[32m-- EXPENSE ITEMS[m
+ create table public.expense_items ([m
+[31m-  id uuid default gen_random_uuid() primary key,[m
+[31m-  expense_id uuid references public.expenses(id) on delete cascade not null,[m
+[32m+[m[32m  id uuid primary key default gen_random_uuid(),[m
+[32m+[m[32m  expense_id uuid not null references public.expenses(id) on delete cascade,[m
+   description text not null,[m
+[31m-  amount numeric(12,2) not null check (amount > 0)[m
+[32m+[m[32m  amount numeric(12, 2) not null check (amount > 0)[m
+ );[m
+[31m-alter table public.expense_items enable row level security;[m
+ [m
+[32m+[m[32m-- ITEM CLAIMS[m
+ create table public.item_claims ([m
+[31m-  id uuid default gen_random_uuid() primary key,[m
+[31m-  item_id uuid references public.expense_items(id) on delete cascade not null,[m
+[31m-  user_id uuid references public.profiles(id) not null,[m
+[31m-  share_amount numeric(12,2) not null,  -- how much of this item this user owes[m
+[31m-  unique(item_id, user_id)[m
+[32m+[m[32m  id uuid primary key default gen_random_uuid(),[m
+[32m+[m[32m  item_id uuid not null references public.expense_items(id) on delete cascade,[m
+[32m+[m[32m  user_id uuid not null references public.profiles(id),[m
+[32m+[m[32m  share_amount numeric(12, 2) not null check (share_amount >= 0),[m
+[32m+[m[32m  unique (item_id, user_id)[m
+ );[m
+[31m-alter table public.item_claims enable row level security;[m
+ [m
+ -- SETTLEMENTS[m
+ create table public.settlements ([m
+[31m-  id uuid default gen_random_uuid() primary key,[m
+[31m-  payer_id uuid references public.profiles(id) not null,   -- person paying[m
+[31m-  payee_id uuid references public.profiles(id) not null,   -- person receiving[m
+[31m-  amount numeric(12,2) not null check (amount > 0),[m
+[31m-  currency text default 'INR' not null,[m
+[32m+[m[32m  id uuid primary key default gen_random_uuid(),[m
+[32m+[m[32m  payer_id uuid not null references public.profiles(id),[m
+[32m+[m[32m  payee_id uuid not null references public.profiles(id),[m
+[32m+[m[32m  amount numeric(12, 2) not null check (amount > 0),[m
+[32m+[m[32m  currency text not null default 'INR',[m
+   group_id uuid references public.groups(id) on delete cascade,[m
+   friendship_id uuid references public.friendships(id) on delete cascade,[m
+   note text,[m
+[31m-  settled_at timestamptz default now() not null,[m
+[31m-  created_by uuid references public.profiles(id) not null[m
+[32m+[m[32m  settled_at timestamptz not null default now(),[m
+[32m+[m[32m  created_by uuid not null references public.profiles(id),[m
+[32m+[m[32m  check (payer_id <> payee_id),[m
+[32m+[m[32m  check ([m
+[32m+[m[32m    (group_id is not null and friendship_id is null)[m
+[32m+[m[32m    or (group_id is null and friendship_id is not null)[m
+[32m+[m[32m  )[m
+ );[m
+[32m+[m
+[32m+[m[32m-- AUTO-CREATE PROFILE ON SIGNUP[m
+[32m+[m[32mcreate or replace function public.handle_new_user()[m
+[32m+[m[32mreturns trigger[m
+[32m+[m[32mlanguage plpgsql[m
+[32m+[m[32msecurity definer[m
+[32m+[m[32mset search_path = ''[m
+[32m+[m[32mas $$[m
+[32m+[m[32mbegin[m
+[32m+[m[32m  insert into public.profiles (id, display_name, avatar_url)[m
+[32m+[m[32m  values ([m
+[32m+[m[32m    new.id,[m
+[32m+[m[32m    coalesce([m
+[32m+[m[32m      nullif(new.raw_user_meta_data ->> 'full_name', ''),[m
+[32m+[m[32m      nullif(split_part(new.email, '@', 1), ''),[m
+[32m+[m[32m      'User'[m
+[32m+[m[32m    ),[m
+[32m+[m[32m    new.raw_user_meta_data ->> 'avatar_url'[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32m  return new;[m
+[32m+[m[32mend;[m
+[32m+[m[32m$$;[m
+[32m+[m
+[32m+[m[32mcreate trigger on_auth_user_created[m
+[32m+[m[32m  after insert on auth.users[m
+[32m+[m[32m  for each row execute function public.handle_new_user();[m
+[32m+[m
+[32m+[m[32m-- RLS HELPERS[m
+[32m+[m[32m-- Security-definer helpers prevent recursive policies on group_members.[m
+[32m+[m[32mcreate or replace function public.is_group_member(target_group_id uuid)[m
+[32m+[m[32mreturns boolean[m
+[32m+[m[32mlanguage sql[m
+[32m+[m[32mstable[m
+[32m+[m[32msecurity definer[m
+[32m+[m[32mset search_path = ''[m
+[32m+[m[32mas $$[m
+[32m+[m[32m  select exists ([m
+[32m+[m[32m    select 1[m
+[32m+[m[32m    from public.group_members[m
+[32m+[m[32m    where group_id = target_group_id[m
+[32m+[m[32m      and user_id = auth.uid()[m
+[32m+[m[32m  );[m
+[32m+[m[32m$$;[m
+[32m+[m
+[32m+[m[32mcreate or replace function public.is_group_admin(target_group_id uuid)[m
+[32m+[m[32mreturns boolean[m
+[32m+[m[32mlanguage sql[m
+[32m+[m[32mstable[m
+[32m+[m[32msecurity definer[m
+[32m+[m[32mset search_path = ''[m
+[32m+[m[32mas $$[m
+[32m+[m[32m  select exists ([m
+[32m+[m[32m    select 1[m
+[32m+[m[32m    from public.group_members[m
+[32m+[m[32m    where group_id = target_group_id[m
+[32m+[m[32m      and user_id = auth.uid()[m
+[32m+[m[32m      and role = 'admin'[m
+[32m+[m[32m  );[m
+[32m+[m[32m$$;[m
+[32m+[m
+[32m+[m[32mcreate or replace function public.is_friendship_participant(target_friendship_id uuid)[m
+[32m+[m[32mreturns boolean[m
+[32m+[m[32mlanguage sql[m
+[32m+[m[32mstable[m
+[32m+[m[32msecurity definer[m
+[32m+[m[32mset search_path = ''[m
+[32m+[m[32mas $$[m
+[32m+[m[32m  select exists ([m
+[32m+[m[32m    select 1[m
+[32m+[m[32m    from public.friendships[m
+[32m+[m[32m    where id = target_friendship_id[m
+[32m+[m[32m      and auth.uid() in (user_a, user_b)[m
+[32m+[m[32m  );[m
+[32m+[m[32m$$;[m
+[32m+[m
+[32m+[m[32mcreate or replace function public.can_access_context([m
+[32m+[m[32m  target_group_id uuid,[m
+[32m+[m[32m  target_friendship_id uuid[m
+[32m+[m[32m)[m
+[32m+[m[32mreturns boolean[m
+[32m+[m[32mlanguage sql[m
+[32m+[m[32mstable[m
+[32m+[m[32msecurity definer[m
+[32m+[m[32mset search_path = ''[m
+[32m+[m[32mas $$[m
+[32m+[m[32m  select case[m
+[32m+[m[32m    when target_group_id is not null[m
+[32m+[m[32m      then public.is_group_member(target_group_id)[m
+[32m+[m[32m    when target_friendship_id is not null[m
+[32m+[m[32m      then public.is_friendship_participant(target_friendship_id)[m
+[32m+[m[32m    else false[m
+[32m+[m[32m  end;[m
+[32m+[m[32m$$;[m
+[32m+[m
+[32m+[m[32mcreate or replace function public.can_access_expense(target_expense_id uuid)[m
+[32m+[m[32mreturns boolean[m
+[32m+[m[32mlanguage sql[m
+[32m+[m[32mstable[m
+[32m+[m[32msecurity definer[m
+[32m+[m[32mset search_path = ''[m
+[32m+[m[32mas $$[m
+[32m+[m[32m  select exists ([m
+[32m+[m[32m    select 1[m
+[32m+[m[32m    from public.expenses[m
+[32m+[m[32m    where id = target_expense_id[m
+[32m+[m[32m      and public.can_access_context(group_id, friendship_id)[m
+[32m+[m[32m  );[m
+[32m+[m[32m$$;[m
+[32m+[m
+[32m+[m[32mcreate or replace function public.can_manage_expense(target_expense_id uuid)[m
+[32m+[m[32mreturns boolean[m
+[32m+[m[32mlanguage sql[m
+[32m+[m[32mstable[m
+[32m+[m[32msecurity definer[m
+[32m+[m[32mset search_path = ''[m
+[32m+[m[32mas $$[m
+[32m+[m[32m  select exists ([m
+[32m+[m[32m    select 1[m
+[32m+[m[32m    from public.expenses[m
+[32m+[m[32m    where id = target_expense_id[m
+[32m+[m[32m      and created_by = auth.uid()[m
+[32m+[m[32m      and public.can_access_context(group_id, friendship_id)[m
+[32m+[m[32m  );[m
+[32m+[m[32m$$;[m
+[32m+[m
+[32m+[m[32mcreate or replace function public.can_access_item(target_item_id uuid)[m
+[32m+[m[32mreturns boolean[m
+[32m+[m[32mlanguage sql[m
+[32m+[m[32mstable[m
+[32m+[m[32msecurity definer[m
+[32m+[m[32mset search_path = ''[m
+[32m+[m[32mas $$[m
+[32m+[m[32m  select exists ([m
+[32m+[m[32m    select 1[m
+[32m+[m[32m    from public.expense_items[m
+[32m+[m[32m    where id = target_item_id[m
+[32m+[m[32m      and public.can_access_expense(expense_id)[m
+[32m+[m[32m  );[m
+[32m+[m[32m$$;[m
+[32m+[m
+[32m+[m[32mcreate or replace function public.can_manage_item(target_item_id uuid)[m
+[32m+[m[32mreturns boolean[m
+[32m+[m[32mlanguage sql[m
+[32m+[m[32mstable[m
+[32m+[m[32msecurity definer[m
+[32m+[m[32mset search_path = ''[m
+[32m+[m[32mas $$[m
+[32m+[m[32m  select exists ([m
+[32m+[m[32m    select 1[m
+[32m+[m[32m    from public.expense_items[m
+[32m+[m[32m    where id = target_item_id[m
+[32m+[m[32m      and public.can_manage_expense(expense_id)[m
+[32m+[m[32m  );[m
+[32m+[m[32m$$;[m
+[32m+[m
+[32m+[m[32m-- ENABLE ROW LEVEL SECURITY[m
+[32m+[m[32malter table public.profiles enable row level security;[m
+[32m+[m[32malter table public.groups enable row level security;[m
+[32m+[m[32malter table public.group_members enable row level security;[m
+[32m+[m[32malter table public.friendships enable row level security;[m
+[32m+[m[32malter table public.expenses enable row level security;[m
+[32m+[m[32malter table public.expense_splits enable row level security;[m
+[32m+[m[32malter table public.expense_items enable row level security;[m
+[32m+[m[32malter table public.item_claims enable row level security;[m
+ alter table public.settlements enable row level security;[m
+[32m+[m
+[32m+[m[32m-- PROFILE POLICIES[m
+[32m+[m[32mcreate policy "Authenticated users can read profiles"[m
+[32m+[m[32m  on public.profiles for select[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (true);[m
+[32m+[m
+[32m+[m[32mcreate policy "Users can update own profile"[m
+[32m+[m[32m  on public.profiles for update[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (id = auth.uid())[m
+[32m+[m[32m  with check (id = auth.uid());[m
+[32m+[m
+[32m+[m[32m-- GROUP POLICIES[m
+[32m+[m[32mcreate policy "Members can view groups"[m
+[32m+[m[32m  on public.groups for select[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.is_group_member(id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Users can create groups"[m
+[32m+[m[32m  on public.groups for insert[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  with check (created_by = auth.uid());[m
+[32m+[m
+[32m+[m[32mcreate policy "Admins can update groups"[m
+[32m+[m[32m  on public.groups for update[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.is_group_admin(id))[m
+[32m+[m[32m  with check (public.is_group_admin(id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Admins can delete groups"[m
+[32m+[m[32m  on public.groups for delete[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.is_group_admin(id));[m
+[32m+[m
+[32m+[m[32m-- GROUP MEMBER POLICIES[m
+[32m+[m[32mcreate policy "Members can view group members"[m
+[32m+[m[32m  on public.group_members for select[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.is_group_member(group_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Creators and admins can add group members"[m
+[32m+[m[32m  on public.group_members for insert[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  with check ([m
+[32m+[m[32m    public.is_group_admin(group_id)[m
+[32m+[m[32m    or exists ([m
+[32m+[m[32m      select 1[m
+[32m+[m[32m      from public.groups[m
+[32m+[m[32m      where id = group_id[m
+[32m+[m[32m        and created_by = auth.uid()[m
+[32m+[m[32m    )[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32mcreate policy "Admins can update group members"[m
+[32m+[m[32m  on public.group_members for update[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.is_group_admin(group_id))[m
+[32m+[m[32m  with check (public.is_group_admin(group_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Admins and members can remove group membership"[m
+[32m+[m[32m  on public.group_members for delete[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.is_group_admin(group_id) or user_id = auth.uid());[m
+[32m+[m
+[32m+[m[32m-- FRIENDSHIP POLICIES[m
+[32m+[m[32mcreate policy "Participants can view friendships"[m
+[32m+[m[32m  on public.friendships for select[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (auth.uid() in (user_a, user_b));[m
+[32m+[m
+[32m+[m[32mcreate policy "Users can create their friendships"[m
+[32m+[m[32m  on public.friendships for insert[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  with check (auth.uid() in (user_a, user_b));[m
+[32m+[m
+[32m+[m[32mcreate policy "Participants can delete friendships"[m
+[32m+[m[32m  on public.friendships for delete[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (auth.uid() in (user_a, user_b));[m
+[32m+[m
+[32m+[m[32m-- EXPENSE POLICIES[m
+[32m+[m[32mcreate policy "Context members can view expenses"[m
+[32m+[m[32m  on public.expenses for select[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_access_context(group_id, friendship_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Context members can create expenses"[m
+[32m+[m[32m  on public.expenses for insert[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  with check ([m
+[32m+[m[32m    created_by = auth.uid()[m
+[32m+[m[32m    and public.can_access_context(group_id, friendship_id)[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can update expenses"[m
+[32m+[m[32m  on public.expenses for update[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using ([m
+[32m+[m[32m    created_by = auth.uid()[m
+[32m+[m[32m    and public.can_access_context(group_id, friendship_id)[m
+[32m+[m[32m  )[m
+[32m+[m[32m  with check ([m
+[32m+[m[32m    created_by = auth.uid()[m
+[32m+[m[32m    and public.can_access_context(group_id, friendship_id)[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can delete expenses"[m
+[32m+[m[32m  on public.expenses for delete[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using ([m
+[32m+[m[32m    created_by = auth.uid()[m
+[32m+[m[32m    and public.can_access_context(group_id, friendship_id)[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32m-- EXPENSE SPLIT POLICIES[m
+[32m+[m[32mcreate policy "Context members can view expense splits"[m
+[32m+[m[32m  on public.expense_splits for select[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_access_expense(expense_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can add expense splits"[m
+[32m+[m[32m  on public.expense_splits for insert[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  with check (public.can_manage_expense(expense_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can update expense splits"[m
+[32m+[m[32m  on public.expense_splits for update[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_manage_expense(expense_id))[m
+[32m+[m[32m  with check (public.can_manage_expense(expense_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can delete expense splits"[m
+[32m+[m[32m  on public.expense_splits for delete[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_manage_expense(expense_id));[m
+[32m+[m
+[32m+[m[32m-- EXPENSE ITEM POLICIES[m
+[32m+[m[32mcreate policy "Context members can view expense items"[m
+[32m+[m[32m  on public.expense_items for select[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_access_expense(expense_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can add expense items"[m
+[32m+[m[32m  on public.expense_items for insert[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  with check (public.can_manage_expense(expense_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can update expense items"[m
+[32m+[m[32m  on public.expense_items for update[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_manage_expense(expense_id))[m
+[32m+[m[32m  with check (public.can_manage_expense(expense_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can delete expense items"[m
+[32m+[m[32m  on public.expense_items for delete[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_manage_expense(expense_id));[m
+[32m+[m
+[32m+[m[32m-- ITEM CLAIM POLICIES[m
+[32m+[m[32mcreate policy "Context members can view item claims"[m
+[32m+[m[32m  on public.item_claims for select[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_access_item(item_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can add item claims"[m
+[32m+[m[32m  on public.item_claims for insert[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  with check (public.can_manage_item(item_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can update item claims"[m
+[32m+[m[32m  on public.item_claims for update[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_manage_item(item_id))[m
+[32m+[m[32m  with check (public.can_manage_item(item_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Expense creators can delete item claims"[m
+[32m+[m[32m  on public.item_claims for delete[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_manage_item(item_id));[m
+[32m+[m
+[32m+[m[32m-- SETTLEMENT POLICIES[m
+[32m+[m[32mcreate policy "Context members can view settlements"[m
+[32m+[m[32m  on public.settlements for select[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using (public.can_access_context(group_id, friendship_id));[m
+[32m+[m
+[32m+[m[32mcreate policy "Context members can create settlements"[m
+[32m+[m[32m  on public.settlements for insert[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  with check ([m
+[32m+[m[32m    created_by = auth.uid()[m
+[32m+[m[32m    and public.can_access_context(group_id, friendship_id)[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32mcreate policy "Settlement creators can update settlements"[m
+[32m+[m[32m  on public.settlements for update[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using ([m
+[32m+[m[32m    created_by = auth.uid()[m
+[32m+[m[32m    and public.can_access_context(group_id, friendship_id)[m
+[32m+[m[32m  )[m
+[32m+[m[32m  with check ([m
+[32m+[m[32m    created_by = auth.uid()[m
+[32m+[m[32m    and public.can_access_context(group_id, friendship_id)[m
+[32m+[m[32m  );[m
+[32m+[m
+[32m+[m[32mcreate policy "Settlement creators can delete settlements"[m
+[32m+[m[32m  on public.settlements for delete[m
+[32m+[m[32m  to authenticated[m
+[32m+[m[32m  using ([m
+[32m+[m[32m    created_by = auth.uid()[m
+[32m+[m[32m    and public.can_access_context(group_id, friendship_id)[m
+[32m+[m[32m  );[m
