@@ -1,3 +1,303 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root,
+  [data-theme='comic'] {
+    color-scheme: dark;
+    --color-primary: 255 77 0;
+    --color-primary-hover: 255 111 48;
+    --color-primary-softest: 255 235 226;
+    --color-primary-soft: 255 205 185;
+    --color-primary-muted: 255 159 121;
+    --color-primary-light: 255 111 48;
+    --color-primary-strong: 210 57 0;
+    --color-primary-deep: 161 42 0;
+    --color-primary-deeper: 109 27 0;
+    --color-primary-darkest: 61 14 0;
+    --color-background: 19 19 19;
+    --color-background-soft: 23 23 23;
+    --color-surface: 28 27 27;
+    --color-surface-raised: 32 32 31;
+    --color-surface-high: 53 53 53;
+    --color-foreground: 245 240 234;
+    --color-foreground-soft: 229 226 225;
+    --color-muted-light: 204 196 191;
+    --color-muted: 173 137 126;
+    --color-muted-dark: 116 92 84;
+    --color-border: 0 0 0;
+    --color-ink: 0 0 0;
+    --color-input: 28 27 27;
+    --color-success: 154 205 50;
+    --color-error: 255 180 171;
+    --font-display: var(--font-anton);
+    --font-body: var(--font-hanken);
+    --font-label: var(--font-space-mono);
+    --radius-control: 0px;
+    --radius-card: 0px;
+    --radius-pill: 0px;
+    --border-width: 3px;
+    --shadow-card: 8px 8px 0 rgb(var(--color-ink));
+    --shadow-button: 8px 8px 0 rgb(var(--color-ink));
+    --shadow-floating: 8px 8px 0 rgb(var(--color-ink));
+    --halftone-color: rgb(var(--color-primary) / 0.24);
+    --nav-background: rgb(var(--color-surface-raised));
+    --nav-blur: 0px;
+  }
+
+  [data-theme='modern'] {
+    color-scheme: dark;
+    --color-primary: 255 77 0;
+    --color-primary-hover: 255 106 46;
+    --color-primary-softest: 58 29 19;
+    --color-primary-soft: 92 37 17;
+    --color-primary-muted: 181 61 16;
+    --color-primary-light: 255 106 46;
+    --color-primary-strong: 223 58 0;
+    --color-primary-deep: 174 45 0;
+    --color-primary-deeper: 120 31 0;
+    --color-primary-darkest: 72 18 0;
+    --color-background: 10 10 10;
+    --color-background-soft: 14 14 14;
+    --color-surface: 26 26 26;
+    --color-surface-raised: 38 38 38;
+    --color-surface-high: 51 51 51;
+    --color-foreground: 250 250 250;
+    --color-foreground-soft: 229 229 229;
+    --color-muted-light: 163 163 163;
+    --color-muted: 115 115 115;
+    --color-muted-dark: 82 82 82;
+    --color-border: 51 51 51;
+    --color-ink: 0 0 0;
+    --color-input: 31 31 31;
+    --color-success: 74 222 128;
+    --color-error: 248 113 113;
+    --font-display: var(--font-jakarta);
+    --font-body: var(--font-jakarta);
+    --font-label: var(--font-jakarta);
+    --radius-control: 8px;
+    --radius-card: 16px;
+    --radius-pill: 9999px;
+    --border-width: 1px;
+    --shadow-card: none;
+    --shadow-button: none;
+    --shadow-floating: 0 18px 50px rgb(0 0 0 / 0.32);
+    --halftone-color: transparent;
+    --nav-background: rgb(255 255 255 / 0.1);
+    --nav-blur: 20px;
+  }
+
+  * {
+    border-color: rgb(var(--color-border));
+  }
+
+  html {
+    background: rgb(var(--color-background));
+  }
+
+  body {
+    min-height: 100vh;
+    background: rgb(var(--color-background));
+    color: rgb(var(--color-foreground));
+    font-family: var(--font-body);
+  }
+
+  [data-theme='comic'] h1,
+  [data-theme='comic'] h2,
+  [data-theme='comic'] h3,
+  [data-theme='comic'] h4,
+  [data-theme='comic'] h5,
+  [data-theme='comic'] h6 {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+  }
+
+  [data-theme='comic'] button,
+  [data-theme='comic'] input,
+  [data-theme='comic'] textarea,
+  [data-theme='comic'] select,
+  [data-theme='comic'] [role='button'] {
+    border-radius: 0;
+  }
+}
+
+@layer components {
+  .theme-card {
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--radius-card);
+    background: rgb(var(--color-surface));
+    box-shadow: var(--shadow-card);
+  }
+
+  .theme-card-priority {
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--radius-card);
+    background: rgb(var(--color-surface-raised));
+    box-shadow: var(--shadow-card);
+  }
+
+  [data-theme='modern'] .theme-card-priority {
+    border-top: 3px solid rgb(var(--color-primary));
+  }
+
+  .theme-button,
+  .comic-button {
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--radius-control);
+    background: rgb(var(--color-primary));
+    color: rgb(var(--color-ink));
+    box-shadow: var(--shadow-button);
+    transition:
+      transform 120ms ease,
+      box-shadow 120ms ease,
+      background-color 120ms ease;
+  }
+
+  [data-theme='comic'] .theme-button,
+  [data-theme='comic'] .comic-button {
+    transform: skewX(-4deg);
+  }
+
+  .theme-button:hover,
+  .comic-button:hover {
+    background: rgb(var(--color-primary-hover));
+  }
+
+  [data-theme='comic'] .theme-button:hover,
+  [data-theme='comic'] .comic-button:hover {
+    transform: translate(3px, 3px) skewX(-4deg);
+    box-shadow: 4px 4px 0 rgb(var(--color-ink));
+  }
+
+  .theme-input {
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--radius-control);
+    background: rgb(var(--color-input));
+    color: rgb(var(--color-foreground));
+    outline: none;
+  }
+
+  .theme-input:focus {
+    border-color: rgb(var(--color-primary));
+    box-shadow: 0 0 0 2px rgb(var(--color-primary) / 0.2);
+  }
+
+  .theme-chip {
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--radius-pill);
+    background: rgb(var(--color-surface-raised));
+  }
+
+  .theme-avatar {
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--radius-pill);
+    background: rgb(var(--color-surface-raised));
+    box-shadow: var(--shadow-card);
+  }
+
+  .floating-nav {
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--radius-card);
+    background: var(--nav-background);
+    box-shadow: var(--shadow-floating);
+    backdrop-filter: blur(var(--nav-blur));
+    -webkit-backdrop-filter: blur(var(--nav-blur));
+  }
+
+  .comic-panel {
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .comic-dark-shadow {
+    box-shadow: var(--shadow-card);
+  }
+
+  .comic-orange-shadow {
+    box-shadow: 8px 8px 0 rgb(var(--color-primary));
+  }
+
+  [data-theme='modern'] .comic-orange-shadow {
+    border-top: 3px solid rgb(var(--color-primary));
+    box-shadow: none;
+  }
+
+  .comic-label {
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow-button);
+  }
+
+  .comic-burst {
+    clip-path: polygon(50% 0%, 61% 30%, 88% 12%, 75% 40%, 100% 50%, 72% 61%, 88% 88%, 60% 75%, 50% 100%, 39% 72%, 12% 88%, 25% 60%, 0% 50%, 29% 39%, 12% 12%, 40% 27%);
+  }
+
+  [data-theme='modern'] .comic-burst {
+    clip-path: none;
+    border-radius: var(--radius-pill);
+  }
+
+  .comic-speech {
+    position: relative;
+    border: var(--border-width) solid rgb(var(--color-border));
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+  }
+
+  .comic-speech::before {
+    position: absolute;
+    right: 14%;
+    bottom: -28px;
+    width: 42px;
+    height: 42px;
+    content: '';
+    background: inherit;
+    border-right: var(--border-width) solid rgb(var(--color-border));
+    border-bottom: var(--border-width) solid rgb(var(--color-border));
+    transform: rotate(45deg);
+  }
+
+  [data-theme='modern'] .comic-speech::before {
+    display: none;
+  }
+
+  .comic-tape {
+    position: absolute;
+    z-index: 10;
+    width: 110px;
+    height: 28px;
+    background: rgb(var(--color-foreground) / 0.35);
+    border: 1px solid rgb(var(--color-foreground) / 0.5);
+  }
+
+  [data-theme='modern'] .comic-tape {
+    display: none;
+  }
+}
+
+@layer utilities {
+  .halftone,
+  .comic-halftone {
+    background-image: radial-gradient(var(--halftone-color) 1.5px, transparent 1.5px);
+    background-size: 9px 9px;
+  }
+
+  .comic-halftone-dark {
+    background-image: radial-gradient(rgb(var(--color-ink) / 0.24) 1.5px, transparent 1.5px);
+    background-size: 9px 9px;
+  }
+
+  [data-theme='modern'] .comic-halftone-dark {
+    background-image: none;
+  }
+
+  .comic-title {
+    text-shadow: 4px 4px 0 rgb(var(--color-ink)), -2px -2px 0 rgb(var(--color-foreground));
+  }
+
+  [data-theme='modern'] .comic-title {
+    text-shadow: none;
+  }
+}

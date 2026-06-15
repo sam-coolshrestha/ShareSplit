@@ -1,22 +1,31 @@
 import type { Metadata } from 'next'
-import { Inter, JetBrains_Mono, Playfair_Display } from 'next/font/google'
+import { Anton, Hanken_Grotesk, Plus_Jakarta_Sans, Space_Mono } from 'next/font/google'
 import type { ReactNode } from 'react'
+
+import { ThemeProvider } from '@/lib/hooks/useTheme'
 
 import './globals.css'
 
-const inter = Inter({
+const anton = Anton({
   subsets: ['latin'],
-  variable: '--font-sans',
+  weight: '400',
+  variable: '--font-anton',
 })
 
-const playfairDisplay = Playfair_Display({
+const hankenGrotesk = Hanken_Grotesk({
   subsets: ['latin'],
-  variable: '--font-display',
+  variable: '--font-hanken',
 })
 
-const jetBrainsMono = JetBrains_Mono({
+const spaceMono = Space_Mono({
   subsets: ['latin'],
-  variable: '--font-mono',
+  weight: ['400', '700'],
+  variable: '--font-space-mono',
+})
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-jakarta',
 })
 
 export const metadata: Metadata = {
@@ -27,11 +36,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" data-theme="comic" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('sharesplit-theme');document.documentElement.dataset.theme=t==='modern'?'modern':'comic'}catch(e){}`,
+          }}
+        />
+      </head>
       <body
-        className={`${inter.className} ${inter.variable} ${playfairDisplay.variable} ${jetBrainsMono.variable}`}
+        className={`${anton.variable} ${hankenGrotesk.variable} ${spaceMono.variable} ${plusJakartaSans.variable}`}
       >
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   )
