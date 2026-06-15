@@ -1,13 +1,34 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const authRoutes = ['/login', '/register']
-const publicRoutes = [...authRoutes, '/auth/callback']
+const AUTH_ROUTES = ['/login', '/register']
+const PUBLIC_ROUTES = ['/', '/shell-preview', ...AUTH_ROUTES, '/api/auth/callback']
+
+function matchesRoute(pathname: string, routes: string[]) {
+  return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`))
+}
+
+function hasSupabaseConfig() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!url || !anonKey) return false
+
+  try {
+    const parsedUrl = new URL(url)
+    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  // Allow local UI previews before a Supabase project is configured.
+  if (!hasSupabaseConfig()) {
+    return NextResponse.next({ request })
+  }
+
+  let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,9 +41,7 @@ export async function middleware(request: NextRequest) {
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
 
-          supabaseResponse = NextResponse.next({
-            request,
-          })
+          supabaseResponse = NextResponse.next({ request })
 
           cookiesToSet.forEach(({ name, value, options }) => {
             supabaseResponse.cookies.set(name, value, options)
@@ -32,45 +51,43 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // getUser validates and refreshes the session when needed.
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { pathname } = request.nextUrl
-  const isAuthRoute = authRoutes.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
-  )
-  const isPublicRoute = publicRoutes.some(
-    (route) => pathname === route || pathname.startsWith(`${route}/`)
-  )
+  const { pathname, search } = request.nextUrl
+  const isAuthRoute = matchesRoute(pathname, AUTH_ROUTES)
+  const isPublicRoute = matchesRoute(pathname, PUBLIC_ROUTES)
 
   if (!user && !isPublicRoute) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    url.searchParams.set('redirectedFrom', pathname)
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = '/login'
+    loginUrl.search = ''
+    loginUrl.searchParams.set('redirectedFrom', `${pathname}${search}`)
 
-    const redirectResponse = NextResponse.redirect(url)
-    supabaseResponse.cookies.getAll().forEach((cookie) => {
-      redirectResponse.cookies.set(cookie)
-    })
-
-    return redirectResponse
+    return redirectWithRefreshedCookies(loginUrl, supabaseResponse)
   }
 
   if (user && isAuthRoute) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    url.search = ''
+    const dashboardUrl = request.nextUrl.clone()
+    dashboardUrl.pathname = '/dashboard'
+    dashboardUrl.search = ''
 
-    const redirectResponse = NextResponse.redirect(url)
-    supabaseResponse.cookies.getAll().forEach((cookie) => {
-      redirectResponse.cookies.set(cookie)
-    })
-
-    return redirectResponse
+    return redirectWithRefreshedCookies(dashboardUrl, supabaseResponse)
   }
 
   return supabaseResponse
+}
+
+function redirectWithRefreshedCookies(url: URL, supabaseResponse: NextResponse) {
+  const redirectResponse = NextResponse.redirect(url)
+
+  supabaseResponse.cookies.getAll().forEach((cookie) => {
+    redirectResponse.cookies.set(cookie)
+  })
+
+  return redirectResponse
 }
 
 export const config = {
