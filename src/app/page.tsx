@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
+import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import { createClient } from '@/lib/supabase/server'
 
 const features = [
@@ -49,15 +50,16 @@ export default async function Home() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#131313] text-obsidian-50">
+    <main className="min-h-screen overflow-hidden bg-background text-foreground">
       <div className="comic-halftone fixed inset-0 pointer-events-none opacity-30" />
 
-      <header className="relative z-20 border-b-4 border-obsidian-50 bg-[#131313] px-5 py-4 md:px-10">
+      <header className="relative z-20 border-b-[length:var(--border-width)] border-border bg-background px-5 py-4 shadow-card md:px-10">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <Link href="/" className="font-display text-2xl font-black uppercase tracking-tight md:text-3xl">
             Share<span className="text-ember-400">Split</span>
           </Link>
           <div className="flex items-center gap-3">
+            <ThemeToggle showLabel />
             <Link
               href="/login"
               className="font-mono text-xs font-bold uppercase tracking-widest text-obsidian-100 transition hover:text-ember-300 sm:text-sm"
@@ -85,7 +87,7 @@ export default async function Home() {
             <span className="mt-2 block text-obsidian-50">Not friendships.</span>
           </h1>
 
-          <p className="comic-panel mt-8 max-w-xl rotate-1 bg-[#292522] p-5 text-base font-semibold leading-7 text-obsidian-100 sm:text-lg">
+          <p className="comic-panel mt-8 max-w-xl rotate-1 bg-surface-raised p-5 text-base font-semibold leading-7 text-obsidian-100 sm:text-lg">
             ShareSplit makes group expenses painless. Track who paid, divide every rupee fairly,
             and settle up before the group chat gets dramatic.
           </p>
@@ -106,7 +108,7 @@ export default async function Home() {
         </div>
 
         <div className="relative mx-auto w-full max-w-lg pb-8">
-          <div className="comic-panel comic-orange-shadow relative rotate-2 bg-[#211e1c] p-5 sm:p-8">
+          <div className="comic-panel comic-orange-shadow relative rotate-2 bg-surface p-5 sm:p-8">
             <div className="comic-tape -left-8 -top-2 -rotate-45" />
             <div className="comic-tape -bottom-2 -right-8 -rotate-45" />
 
@@ -142,7 +144,7 @@ export default async function Home() {
                   <p className="font-mono text-[10px] font-black uppercase tracking-widest">Dinner</p>
                   <p className="mt-3 font-display text-2xl font-black">₹3,200</p>
                 </div>
-                <div className="comic-panel bg-[#393330] p-4">
+                <div className="comic-panel bg-surface-high p-4">
                   <p className="font-mono text-[10px] font-black uppercase tracking-widest text-ember-200">
                     Cab
                   </p>
