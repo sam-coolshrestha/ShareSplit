@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/client'
 
 type AppShellProps = {
   children: ReactNode
+  pendingInviteCount?: number
   user: {
     displayName: string
     email: string
@@ -36,7 +37,7 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-export function AppShell({ children, user }: AppShellProps) {
+export function AppShell({ children, user, pendingInviteCount = 0 }: AppShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { theme, toggleTheme } = useTheme()
@@ -104,6 +105,11 @@ export function AppShell({ children, user }: AppShellProps) {
                 )}
               >
                 <Icon className="h-5 w-5 shrink-0" />
+                {item.href === '/dashboard' && pendingInviteCount > 0 && !isExpanded ? (
+                  <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-error px-1 text-[0.5625rem] text-ink">
+                    {pendingInviteCount > 9 ? '9+' : pendingInviteCount}
+                  </span>
+                ) : null}
                 <AnimatePresence initial={false}>
                   {isExpanded ? (
                     <motion.span
@@ -113,6 +119,11 @@ export function AppShell({ children, user }: AppShellProps) {
                       className="whitespace-nowrap"
                     >
                       {item.label}
+                      {item.href === '/dashboard' && pendingInviteCount > 0 ? (
+                        <span className="ml-2 inline-grid h-5 min-w-5 place-items-center rounded-full bg-error px-1 text-[0.625rem] text-ink">
+                          {pendingInviteCount > 9 ? '9+' : pendingInviteCount}
+                        </span>
+                      ) : null}
                     </motion.span>
                   ) : null}
                 </AnimatePresence>
@@ -163,7 +174,7 @@ export function AppShell({ children, user }: AppShellProps) {
           onSignOut={handleSignOut}
         />
         <main className="min-h-[calc(100vh-64px)] p-4">{children}</main>
-        <MobileNavigation pathname={pathname} />
+        <MobileNavigation pathname={pathname} pendingInviteCount={pendingInviteCount} />
       </div>
     </div>
   )
@@ -229,7 +240,13 @@ function ThemeToggle({ theme, toggleTheme }: Pick<TopbarProps, 'theme' | 'toggle
   )
 }
 
-function MobileNavigation({ pathname }: { pathname: string }) {
+function MobileNavigation({
+  pathname,
+  pendingInviteCount,
+}: {
+  pathname: string
+  pendingInviteCount: number
+}) {
   return (
     <nav
       className="floating-nav fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 px-1 py-2"
@@ -245,11 +262,16 @@ function MobileNavigation({ pathname }: { pathname: string }) {
             href={item.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'flex min-h-12 flex-col items-center justify-center gap-1 rounded-md px-1 font-mono text-[0.625rem] font-bold uppercase tracking-wide transition',
+              'relative flex min-h-12 flex-col items-center justify-center gap-1 rounded-md px-1 font-mono text-[0.625rem] font-bold uppercase tracking-wide transition',
               active ? 'bg-primary text-ink' : 'text-muted-light'
             )}
           >
             <Icon className="h-5 w-5" />
+            {item.href === '/dashboard' && pendingInviteCount > 0 ? (
+              <span className="absolute right-2 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-error px-1 text-[0.5625rem] text-ink">
+                {pendingInviteCount > 9 ? '9+' : pendingInviteCount}
+              </span>
+            ) : null}
             <span>{item.label}</span>
           </Link>
         )
