@@ -18,8 +18,15 @@ export default async function AuthenticatedAppLayout({ children }: { children: R
     .eq('id', user.id)
     .maybeSingle()
 
+  const { count: pendingInviteCount } = await supabase
+    .from('group_invites')
+    .select('id', { count: 'exact', head: true })
+    .eq('invited_user_id', user.id)
+    .eq('status', 'pending')
+
   return (
     <AppShell
+      pendingInviteCount={pendingInviteCount ?? 0}
       user={{
         displayName:
           profile?.display_name ??

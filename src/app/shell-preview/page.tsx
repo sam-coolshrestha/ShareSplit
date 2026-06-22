@@ -4,6 +4,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/Ca
 export default function ShellPreviewPage() {
   return (
     <AppShell
+      pendingInviteCount={2}
       user={{
         displayName: 'Preview User',
         email: 'preview@sharesplit.app',
