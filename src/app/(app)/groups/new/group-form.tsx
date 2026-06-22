@@ -42,45 +42,18 @@ export function GroupForm() {
     setFormError(null)
 
     const supabase = createClient()
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      router.replace('/login')
-      router.refresh()
-      return
-    }
-
-    const { data: group, error: groupError } = await supabase
-      .from('groups')
-      .insert({
-        name: values.name,
-        description: values.description || null,
-        currency: values.currency,
-        created_by: user.id,
-      })
-      .select('id')
-      .single()
-
-    if (groupError || !group) {
-      setFormError(groupError?.message ?? 'Could not create the group.')
-      return
-    }
-
-    const { error: memberError } = await supabase.from('group_members').insert({
-      group_id: group.id,
-      user_id: user.id,
-      role: 'admin',
+    const { data: groupId, error } = await supabase.rpc('create_group_with_admin_membership', {
+      group_name: values.name,
+      group_description: values.description ?? '',
+      group_currency: values.currency,
     })
 
-    if (memberError) {
-      setFormError(memberError.message)
+    if (error || !groupId) {
+      setFormError(error?.message ?? 'Could not create the group.')
       return
     }
 
-    router.push(`/groups/${group.id}`)
+    router.push(`/groups/${groupId}`)
     router.refresh()
   }
 
