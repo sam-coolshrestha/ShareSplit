@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { createClient } from '@/lib/supabase/server'
+import { calculateMemberBalances } from '@/lib/utils/balance'
+import { simplifyDebts } from '@/lib/utils/debt-simplification'
 
 type GroupDetailPageProps = {
   params: {
@@ -93,8 +95,6 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
     name: getProfileName(member.profiles),
   }))
 
-  const memberMap = new Map(members.map((member) => [member.id, member.name]))
-
   const { data: expenseRows } = await supabase
     .from('expenses')
     .select(`
@@ -120,33 +120,9 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
   const expenseCount = groupExpenses.length
   const totalSpent = groupExpenses.reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0)
 
-  const netByMember = new Map<string, number>()
-
-  for (const expense of groupExpenses) {
-    const payerId = expense.paid_by
-    const splits = expense.expense_splits ?? []
-
-    for (const split of splits) {
-      const shareAmount = Number(split.amount ?? 0)
-
-      if (split.user_id === user.id && payerId !== user.id) {
-        netByMember.set(payerId, (netByMember.get(payerId) ?? 0) - shareAmount)
-      }
-
-      if (payerId === user.id && split.user_id !== user.id) {
-        netByMember.set(split.user_id, (netByMember.get(split.user_id) ?? 0) + shareAmount)
-      }
-    }
-  }
-
-  const balances = Array.from(netByMember.entries())
-    .map(([memberId, amount]) => ({
-      memberId,
-      name: memberMap.get(memberId) ?? 'Member',
-      amount,
-    }))
-    .filter((entry) => Math.abs(entry.amount) > 0.009)
-    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+  const balances = calculateMemberBalances(members, groupExpenses)
+  const activeBalances = balances.filter((balance) => Math.abs(balance.balance) > 0.009)
+  const simplifiedDebts = simplifyDebts(balances)
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-7">
@@ -186,15 +162,15 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Group balance</p>
-              <h2 className="mt-3 font-display text-3xl text-foreground">Who owes you, and who you owe</h2>
+              <h2 className="mt-3 font-display text-3xl text-foreground">Real balances by member</h2>
             </div>
-            <Badge variant="primary">{balances.length}</Badge>
+            <Badge variant="primary">{activeBalances.length}</Badge>
           </div>
 
           <div className="mt-6 space-y-3">
-            {balances.length > 0 ? (
-              balances.map((balance) => {
-                const isOwedToYou = balance.amount > 0
+            {activeBalances.length > 0 ? (
+              activeBalances.map((balance) => {
+                const isOwed = balance.balance > 0
 
                 return (
                   <div
@@ -204,18 +180,18 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
                     <div>
                       <p className="font-display text-2xl text-foreground">{balance.name}</p>
                       <p className="mt-1 text-sm text-muted-light">
-                        {isOwedToYou ? `${balance.name} owes you` : `You owe ${balance.name}`}
+                        {isOwed ? `${balance.name} should receive` : `${balance.name} should pay`}
                       </p>
                     </div>
-                    <p className={`font-display text-3xl ${isOwedToYou ? 'text-success' : 'text-primary'}`}>
-                      {formatCurrency(Math.abs(balance.amount), group.currency)}
+                    <p className={`font-display text-3xl ${isOwed ? 'text-success' : 'text-primary'}`}>
+                      {formatCurrency(Math.abs(balance.balance), group.currency)}
                     </p>
                   </div>
                 )
               })
             ) : (
               <div className="theme-card bg-surface-raised px-4 py-6 text-sm text-muted-light">
-                You are settled up with everyone in this group right now.
+                Everyone is settled up in this group right now.
               </div>
             )}
           </div>
@@ -236,6 +212,39 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           </Card>
         </div>
       </div>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Simplify</p>
+            <h2 className="mt-2 font-display text-3xl text-foreground">Suggested settlements</h2>
+          </div>
+          <Badge variant="primary">{simplifiedDebts.length}</Badge>
+        </div>
+
+        <Card className="p-5 sm:p-6">
+          <div className="space-y-3">
+            {simplifiedDebts.length > 0 ? (
+              simplifiedDebts.map((debt) => (
+                <div
+                  key={`${debt.fromMemberId}-${debt.toMemberId}`}
+                  className="theme-card flex flex-col gap-3 bg-surface-raised px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <p className="text-sm text-muted-light">
+                    <span className="font-bold text-foreground">{debt.fromName ?? 'Member'}</span> pays{' '}
+                    <span className="font-bold text-foreground">{debt.toName ?? 'Member'}</span>
+                  </p>
+                  <p className="font-display text-3xl text-primary">{formatCurrency(debt.amount, group.currency)}</p>
+                </div>
+              ))
+            ) : (
+              <div className="theme-card bg-surface-raised px-4 py-6 text-sm text-muted-light">
+                No settlement transfers are needed.
+              </div>
+            )}
+          </div>
+        </Card>
+      </section>
 
       <section id="members" className="space-y-4">
         <div className="flex items-center justify-between gap-4">
