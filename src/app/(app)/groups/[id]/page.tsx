@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
 import { InviteMemberForm } from '@/components/groups/InviteMemberForm'
+import { SettleUpModal } from '@/components/settlement/SettleUpModal'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -33,6 +34,12 @@ type GroupExpenseRow = {
 type GroupMemberRow = {
   user_id: string
   profiles: { display_name: string } | { display_name: string }[] | null
+}
+
+type GroupSettlementRow = {
+  payer_id: string
+  payee_id: string
+  amount: number | string | null
 }
 
 function getProfileName(
@@ -120,7 +127,12 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
   const expenseCount = groupExpenses.length
   const totalSpent = groupExpenses.reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0)
 
-  const balances = calculateMemberBalances(members, groupExpenses)
+  const { data: settlementRows } = await supabase
+    .from('settlements')
+    .select('payer_id, payee_id, amount')
+    .eq('group_id', group.id)
+
+  const balances = calculateMemberBalances(members, groupExpenses, (settlementRows ?? []) as GroupSettlementRow[])
   const activeBalances = balances.filter((balance) => Math.abs(balance.balance) > 0.009)
   const simplifiedDebts = simplifyDebts(balances)
 
@@ -222,28 +234,12 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           <Badge variant="primary">{simplifiedDebts.length}</Badge>
         </div>
 
-        <Card className="p-5 sm:p-6">
-          <div className="space-y-3">
-            {simplifiedDebts.length > 0 ? (
-              simplifiedDebts.map((debt) => (
-                <div
-                  key={`${debt.fromMemberId}-${debt.toMemberId}`}
-                  className="theme-card flex flex-col gap-3 bg-surface-raised px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <p className="text-sm text-muted-light">
-                    <span className="font-bold text-foreground">{debt.fromName ?? 'Member'}</span> pays{' '}
-                    <span className="font-bold text-foreground">{debt.toName ?? 'Member'}</span>
-                  </p>
-                  <p className="font-display text-3xl text-primary">{formatCurrency(debt.amount, group.currency)}</p>
-                </div>
-              ))
-            ) : (
-              <div className="theme-card bg-surface-raised px-4 py-6 text-sm text-muted-light">
-                No settlement transfers are needed.
-              </div>
-            )}
-          </div>
-        </Card>
+        <SettleUpModal
+          groupId={group.id}
+          currency={group.currency}
+          currentUserId={user.id}
+          transactions={simplifiedDebts}
+        />
       </section>
 
       <section id="members" className="space-y-4">
