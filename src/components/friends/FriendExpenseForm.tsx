@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
+import { SplitTabs } from '@/components/expenses/SplitTabs'
 import { createClient } from '@/lib/supabase/client'
 
 const friendExpenseSchema = z.object({
@@ -63,6 +64,8 @@ export function FriendExpenseForm({
 }) {
   const router = useRouter()
   const [formError, setFormError] = useState<string | null>(null)
+  const [selectedMembers, setSelectedMembers] = useState<string[]>(members.map((m) => m.id))
+
   const {
     register,
     handleSubmit,
@@ -82,6 +85,18 @@ export function FriendExpenseForm({
   const watchedAmount = watch('amount')
   const parsedAmount = typeof watchedAmount === 'number' ? watchedAmount : Number.parseFloat(watchedAmount || '0')
   const equalShare = Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount / members.length : 0
+
+  const handleMemberToggle = (memberId: string) => {
+    setSelectedMembers((current) =>
+      current.includes(memberId)
+        ? current.filter((id) => id !== memberId)
+        : [...current, memberId]
+    )
+  }
+
+  const handleSelectAll = () => {
+    setSelectedMembers(members.map((m) => m.id))
+  }
 
   const onSubmit = async (values: FriendExpenseValues) => {
     setFormError(null)
@@ -210,25 +225,14 @@ export function FriendExpenseForm({
           </form>
         </Card>
 
-        <Card className="overflow-hidden p-0">
-          <div className="border-b-[length:var(--border-width)] border-border bg-surface-raised p-5 sm:p-6">
-            <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Equal split</p>
-            <h2 className="mt-3 font-display text-3xl text-foreground">How this will split</h2>
-          </div>
-          <div className="p-5 sm:p-6">
-            <div className="space-y-3">
-              {members.map((member) => (
-                <div key={member.id} className="theme-card flex items-center justify-between gap-4 bg-surface-raised px-4 py-4">
-                  <div>
-                    <p className="font-label text-sm font-bold text-foreground">{member.name}</p>
-                    <p className="mt-1 font-mono text-[0.625rem] font-bold uppercase tracking-widest text-muted">Equal share</p>
-                  </div>
-                  <p className="font-display text-2xl text-primary">{formatCurrency(equalShare || 0, currency)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
+        <SplitTabs
+          members={members}
+          totalAmount={parsedAmount || 0}
+          currency={currency}
+          selectedMembers={selectedMembers}
+          onMemberToggle={handleMemberToggle}
+          onSelectAll={handleSelectAll}
+        />
       </div>
     </div>
   )

@@ -94,62 +94,62 @@ export function CustomSplitPanel({
         </button>
       </div>
 
-      <div className="space-y-3">
-        {members.map((member) => {
-          const rawValue = values.find((value) => value.memberId === member.id)?.value ?? ''
-          const entered = toNumber(rawValue)
-          const calculatedShare = mode === 'percentage' ? (totalAmount * entered) / 100 : entered
+       <div className="space-y-3">
+         {members.map((member) => {
+           const rawValue = values.find((value) => value.memberId === member.id)?.value ?? ''
+           const entered = toNumber(rawValue)
+           const calculatedShare = mode === 'percentage' ? (totalAmount * entered) / 100 : entered
 
-          return (
-            <div
-              key={member.id}
-              className="theme-card grid gap-3 bg-surface-raised px-4 py-4 sm:grid-cols-[1fr_9rem]"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <Avatar alt={member.name} fallback={member.name} size="sm" />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-foreground">{member.name}</p>
-                  <p className="mt-1 font-mono text-[0.625rem] font-bold uppercase tracking-widest text-muted">
-                    {formatCurrency(calculatedShare || 0, currency)}
-                  </p>
-                </div>
-              </div>
-              <div className="relative">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  className="theme-input h-11 w-full px-3 pr-8 text-sm"
-                  value={rawValue}
-                  aria-label={`${member.name} ${mode === 'percentage' ? 'percentage' : 'amount'}`}
-                  onChange={(event) => onValueChange(member.id, event.target.value)}
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
-                  {mode === 'percentage' ? '%' : currency}
-                </span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+           return (
+             <div
+               key={member.id}
+               className="theme-card grid gap-3 bg-surface-raised px-4 py-4 sm:grid-cols-[1fr_9rem]"
+             >
+               <div className="flex min-w-0 items-center gap-3">
+                 <Avatar alt={member.name} fallback={member.name} size="sm" />
+                 <div className="min-w-0">
+                   <p className="truncate text-sm font-bold text-foreground">{member.name}</p>
+                   <p className="mt-1 font-mono text-[0.625rem] font-bold uppercase tracking-widest text-muted">
+                     {formatCurrency(calculatedShare || 0, currency)}
+                   </p>
+                 </div>
+               </div>
+               <div className="relative">
+                 <input
+                   type="number"
+                   min="0"
+                   step="0.01"
+                   inputMode="decimal"
+                   className="theme-input h-11 w-full px-3 pr-8 text-sm"
+                   value={rawValue}
+                   aria-label={`${member.name} ${mode === 'percentage' ? 'percentage' : 'amount'}`}
+                   onChange={(event) => onValueChange(member.id, event.target.value)}
+                 />
+                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
+                   {mode === 'percentage' ? '%' : currency}
+                 </span>
+               </div>
+             </div>
+           )
+         })}
+       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <div className="theme-card bg-surface-raised px-4 py-3">
-          <p className="font-mono text-[0.625rem] font-bold uppercase tracking-widest text-muted">Entered</p>
-          <p className="mt-1 font-display text-2xl text-primary">
-            {mode === 'percentage' ? `${totalEntered.toFixed(2)}%` : formatCurrency(totalEntered, currency)}
-          </p>
-        </div>
-        <div className="theme-card bg-surface-raised px-4 py-3">
-          <p className="font-mono text-[0.625rem] font-bold uppercase tracking-widest text-muted">Remaining</p>
-          <p className="mt-1 font-display text-2xl text-primary">
-            {mode === 'percentage' ? `${remaining.toFixed(2)}%` : formatCurrency(remaining, currency)}
-          </p>
-        </div>
-      </div>
+       <div className="mt-5 grid gap-3 sm:grid-cols-2">
+         <div className="theme-card bg-surface-raised px-4 py-3">
+           <p className="font-mono text-[0.625rem] font-bold uppercase tracking-widest text-muted">Entered</p>
+           <p className="mt-1 font-display text-2xl text-primary">
+             {mode === 'percentage' ? `${totalEntered.toFixed(2)}%` : formatCurrency(totalEntered, currency)}
+           </p>
+         </div>
+         <div className="theme-card bg-surface-raised px-4 py-3">
+           <p className="font-mono text-[0.625rem] font-bold uppercase tracking-widest text-muted">Remaining</p>
+           <p className="mt-1 font-display text-2xl text-primary">
+             {mode === 'percentage' ? `${remaining.toFixed(2)}%` : formatCurrency(remaining, currency)}
+           </p>
+         </div>
+       </div>
 
-      {error ? <p className="mt-4 text-sm text-error">{error}</p> : null}
-    </div>
-  )
+       {error ? <p className="mt-4 text-sm text-error">{error}</p> : null}
+     </div>
+   )
 }

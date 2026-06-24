@@ -116,7 +116,9 @@ export function EqualExpenseForm({ currency, groupId, groupName, members }: Equa
   )
 
   const equalShare =
-    Number.isFinite(parsedAmount) && splitMembers.length > 0 && parsedAmount > 0 ? parsedAmount / splitMembers.length : 0
+    Number.isFinite(parsedAmount) && splitMembers.length > 0 && parsedAmount > 0
+      ? parsedAmount / splitMembers.length
+      : 0
 
   const setCustomValue = (memberId: string, value: string) => {
     setCustomValues((current) => current.map((entry) => (entry.memberId === memberId ? { ...entry, value } : entry)))
