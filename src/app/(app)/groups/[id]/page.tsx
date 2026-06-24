@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 
+import { AddFriendToGroupForm } from '@/components/groups/AddFriendToGroupForm'
+import { GroupActions } from '@/components/groups/GroupActions'
 import { InviteMemberForm } from '@/components/groups/InviteMemberForm'
 import { SettleUpModal } from '@/components/settlement/SettleUpModal'
 import { Badge } from '@/components/ui/Badge'
@@ -23,17 +25,26 @@ type GroupExpenseRow = {
   currency: string
   date: string
   paid_by: string
-  profiles: { display_name: string } | { display_name: string }[] | null
+  created_by: string
+  paidBy: { display_name: string } | { display_name: string }[] | null
+  creator: { display_name: string } | { display_name: string }[] | null
   expense_splits: Array<{
     user_id: string
     amount: number | string | null
-    profiles: { display_name: string } | { display_name: string }[] | null
   }> | null
 }
 
 type GroupMemberRow = {
   user_id: string
   profiles: { display_name: string } | { display_name: string }[] | null
+}
+
+type FriendshipRow = {
+  id: string
+  user_a: string
+  user_b: string
+  friend_a: { display_name: string } | { display_name: string }[] | null
+  friend_b: { display_name: string } | { display_name: string }[] | null
 }
 
 type GroupSettlementRow = {
@@ -91,6 +102,8 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
     .eq('user_id', user.id)
     .maybeSingle()
 
+  const isAdmin = membership?.role === 'admin'
+
   const { data: memberRows } = await supabase
     .from('group_members')
     .select('user_id, profiles(display_name)')
@@ -111,11 +124,12 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
       currency,
       date,
       paid_by,
-      profiles!expenses_paid_by_fkey(display_name),
+      created_by,
+      paidBy:profiles!expenses_paid_by_fkey(display_name),
+      creator:profiles!expenses_created_by_fkey(display_name),
       expense_splits(
         user_id,
-        amount,
-        profiles(display_name)
+        amount
       )
     `)
     .eq('group_id', group.id)
@@ -132,9 +146,34 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
     .select('payer_id, payee_id, amount')
     .eq('group_id', group.id)
 
-  const balances = calculateMemberBalances(members, groupExpenses, (settlementRows ?? []) as GroupSettlementRow[])
+  const { data: friendshipRows } = await supabase
+    .from('friendships')
+    .select(`
+      id,
+      user_a,
+      user_b,
+      friend_a:profiles!friendships_user_a_fkey(display_name),
+      friend_b:profiles!friendships_user_b_fkey(display_name)
+    `)
+    .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
+
+  const balances = calculateMemberBalances(members, groupExpenses, (settlementRows ?? []) as GroupSettlementRow[]).filter(
+    (balance) => balance.memberId !== user.id
+  )
   const activeBalances = balances.filter((balance) => Math.abs(balance.balance) > 0.009)
-  const simplifiedDebts = simplifyDebts(balances)
+  const simplifiedDebts = simplifyDebts(
+    calculateMemberBalances(members, groupExpenses, (settlementRows ?? []) as GroupSettlementRow[])
+  )
+  const memberIds = new Set(members.map((member) => member.id))
+  const availableFriends = ((friendshipRows ?? []) as FriendshipRow[])
+    .map((friendship) => {
+      const friendId = friendship.user_a === user.id ? friendship.user_b : friendship.user_a
+      const friendName =
+        friendship.user_a === user.id ? getProfileName(friendship.friend_b, 'Friend') : getProfileName(friendship.friend_a, 'Friend')
+
+      return { id: friendId, name: friendName }
+    })
+    .filter((friend) => !memberIds.has(friend.id))
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-7">
@@ -174,7 +213,7 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Group balance</p>
-              <h2 className="mt-3 font-display text-3xl text-foreground">Real balances by member</h2>
+              <h2 className="mt-3 font-display text-3xl text-foreground">Who owes you, and who you owe</h2>
             </div>
             <Badge variant="primary">{activeBalances.length}</Badge>
           </div>
@@ -192,7 +231,7 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
                     <div>
                       <p className="font-display text-2xl text-foreground">{balance.name}</p>
                       <p className="mt-1 text-sm text-muted-light">
-                        {isOwed ? `${balance.name} should receive` : `${balance.name} should pay`}
+                        {isOwed ? `${balance.name} owes you ${formatCurrency(balance.balance, group.currency)}` : `You owe ${balance.name} ${formatCurrency(Math.abs(balance.balance), group.currency)}`}
                       </p>
                     </div>
                     <p className={`font-display text-3xl ${isOwed ? 'text-success' : 'text-primary'}`}>
@@ -234,12 +273,7 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           <Badge variant="primary">{simplifiedDebts.length}</Badge>
         </div>
 
-        <SettleUpModal
-          groupId={group.id}
-          currency={group.currency}
-          currentUserId={user.id}
-          transactions={simplifiedDebts}
-        />
+        <SettleUpModal groupId={group.id} currency={group.currency} currentUserId={user.id} transactions={simplifiedDebts} />
       </section>
 
       <section id="members" className="space-y-4">
@@ -275,16 +309,14 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           <div className="relative z-10 space-y-3">
             {groupExpenses.length > 0 ? (
               groupExpenses.map((expense) => {
-                const payerName = getProfileName(expense.profiles)
+                const payerName = getProfileName(expense.paidBy)
+                const creatorName = getProfileName(expense.creator)
                 const userShareRow = (expense.expense_splits ?? []).find((split) => split.user_id === user.id)
                 const userShare = Number(userShareRow?.amount ?? 0)
-                const youPaid = expense.paid_by === user.id
                 const summary =
-                  userShare > 0
-                    ? youPaid
-                      ? 'You paid for this split'
-                      : `You owe ${payerName}`
-                    : 'You were not included in this split'
+                  expense.paid_by === user.id
+                    ? 'You added this payment'
+                    : `${creatorName} added this payment`
 
                 return (
                   <div
@@ -304,7 +336,7 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
                       <div>
                         <p className="font-display text-2xl text-foreground">{expense.description}</p>
                         <p className="mt-1 text-sm text-muted-light">
-                          {payerName} paid {formatCurrency(Number(expense.amount ?? 0), expense.currency || group.currency)}
+                          Paid by {payerName} • Added by {creatorName}
                         </p>
                         <p className="mt-1 text-sm text-muted-light">{summary}</p>
                       </div>
@@ -337,7 +369,20 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
         </Card>
       </section>
 
-      {membership?.role === 'admin' ? (
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Manage</p>
+            <h2 className="mt-2 font-display text-3xl text-foreground">Group settings</h2>
+          </div>
+        </div>
+
+        <Card className="p-5 sm:p-6">
+          <GroupActions groupId={group.id} currentUserId={user.id} isAdmin={isAdmin} />
+        </Card>
+      </section>
+
+      {isAdmin ? (
         <Card className="p-5 sm:p-6">
           <div className="mb-5">
             <Badge variant="primary">Admin</Badge>
@@ -347,6 +392,16 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
             </p>
           </div>
           <InviteMemberForm groupId={group.id} />
+          <div className="mt-6 border-t-[length:var(--border-width)] border-border pt-6">
+            <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Shortcut</p>
+            <h3 className="mt-2 font-display text-2xl text-foreground">Add an existing friend</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-light">
+              Skip typing the email again and invite one of your current friends straight into this group.
+            </p>
+            <div className="mt-4">
+              <AddFriendToGroupForm friends={availableFriends} groupId={group.id} />
+            </div>
+          </div>
         </Card>
       ) : null}
     </div>
