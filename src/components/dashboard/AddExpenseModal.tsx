@@ -6,12 +6,32 @@ import { Button } from '@/components/ui/Button'
 import { createClient } from '@/lib/supabase/client'
 
 type Friend = {
-  id: string
+  friendshipId: string
   display_name: string
 }
 type Group = {
   id: string
   name: string
+}
+
+type FriendshipRow = {
+  id: string
+  user_a: string
+  user_b: string
+  friend_a: { display_name: string } | { display_name: string }[] | null
+  friend_b: { display_name: string } | { display_name: string }[] | null
+}
+
+type GroupMembershipRow = {
+  group_id: string
+  group: { name: string } | { name: string }[] | null
+}
+
+function getDisplayName(
+  profile: { display_name: string } | { display_name: string }[] | null
+) {
+  if (!profile) return 'Friend'
+  return Array.isArray(profile) ? profile[0]?.display_name ?? 'Friend' : profile.display_name
 }
 
 export function AddExpenseModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -42,21 +62,21 @@ export function AddExpenseModal({ open, onClose }: { open: boolean; onClose: () 
         .select('id, user_a, user_b, friend_a:profiles!friendships_user_a_fkey(display_name), friend_b:profiles!friendships_user_b_fkey(display_name)')
         .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
 
-      const friendList: Friend[] = (friendRows ?? []).map((row: any) => {
+      const friendList: Friend[] = ((friendRows ?? []) as FriendshipRow[]).map((row) => {
         const friendProfile = row.user_a === user.id ? row.friend_b : row.friend_a
-        return { id: row.id, display_name: friendProfile?.display_name ?? 'Friend' }
-      }) ?? []
+        return { friendshipId: row.id, display_name: getDisplayName(friendProfile) }
+      })
 
       // Fetch groups
       const { data: groupRows } = await supabase
         .from('group_members')
-        .select('id, group:groups!group_members_group_id_fkey(name)')
+        .select('group_id, group:groups!group_members_group_id_fkey(name)')
         .eq('user_id', user.id)
 
-      const groupList: Group[] = (groupRows ?? []).map((row: any) => ({
-        id: row.id,
-        name: row.group?.name ?? '',
-      })) ?? []
+      const groupList: Group[] = ((groupRows ?? []) as GroupMembershipRow[]).map((row) => ({
+        id: row.group_id,
+        name: Array.isArray(row.group) ? row.group[0]?.name ?? '' : row.group?.name ?? '',
+      }))
 
       setFriends(friendList)
       setGroups(groupList)
@@ -125,15 +145,11 @@ export function AddExpenseModal({ open, onClose }: { open: boolean; onClose: () 
             mode === 'friend' &&
             filteredFriends.map((friend) => (
               <li
-                key={friend.id}
+                key={friend.friendshipId}
                 className="flex items-center p-4 min-h-[56px] cursor-pointer hover:bg-surface-raised"
                 onClick={() => {
                   onClose()
-                  router.push(
-                    `/expenses/new?friendId=${friend.id}&friendName=${encodeURIComponent(
-                      friend.display_name
-                    )}`
-                  )
+                  router.push(`/friends/${friend.friendshipId}/expenses/new`)
                 }}
               >
                 <span className="flex-1">{friend.display_name}</span>
@@ -152,9 +168,7 @@ export function AddExpenseModal({ open, onClose }: { open: boolean; onClose: () 
                 className="flex items-center p-4 min-h-[56px] cursor-pointer hover:bg-surface-raised"
                 onClick={() => {
                   onClose()
-                  router.push(
-                    `/expenses/new?groupId=${group.id}&groupName=${encodeURIComponent(group.name)}`
-                  )
+                  router.push(`/groups/${group.id}/expenses/new`)
                 }}
               >
                 <span className="flex-1">{group.name}</span>

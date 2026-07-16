@@ -48,7 +48,7 @@ function FriendRow({
       {/* Feature 5: Full-row tappable button */}
       <button
         type="button"
-        onClick={() => router.push(`/friends/${friend.friendId}`)}
+        onClick={() => router.push(`/friends/${friend.friendshipId}`)}
         className="w-full text-left touch-manipulation"
         style={{ touchAction: 'manipulation', minHeight: 64 }}
       >
@@ -80,9 +80,7 @@ function FriendRow({
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                router.push(
-                  `/expenses/new?friendId=${friend.friendId}&friendName=${encodeURIComponent(friend.friendName)}`
-                )
+                router.push(`/friends/${friend.friendshipId}/expenses/new`)
               }}
               title="Add expense"
               aria-label={`Add expense with ${friend.friendName}`}

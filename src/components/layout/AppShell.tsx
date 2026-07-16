@@ -6,15 +6,19 @@ import { usePathname, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { ReactNode } from 'react'
 
+import { NotificationCenter } from '@/components/layout/NotificationCenter'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/components/ui/utils'
+import type { NotificationItem } from '@/lib/activity'
 import { useTheme } from '@/lib/hooks/useTheme'
 import { createClient } from '@/lib/supabase/client'
 
 type AppShellProps = {
   children: ReactNode
   pendingInviteCount?: number
+  notifications?: NotificationItem[]
+  unreadNotificationCount?: number
   user: {
     displayName: string
     email: string
@@ -37,7 +41,13 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-export function AppShell({ children, user, pendingInviteCount = 0 }: AppShellProps) {
+export function AppShell({
+  children,
+  user,
+  pendingInviteCount = 0,
+  notifications = [],
+  unreadNotificationCount = 0,
+}: AppShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { theme, toggleTheme } = useTheme()
@@ -136,11 +146,7 @@ export function AppShell({ children, user, pendingInviteCount = 0 }: AppShellPro
           <div className="flex items-center gap-3 overflow-hidden px-2 py-2">
             <Avatar src={user.avatarUrl} alt={user.displayName} fallback={user.displayName} size="sm" />
             {isExpanded ? (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="min-w-0"
-              >
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-w-0">
                 <p className="truncate text-sm font-bold text-foreground">{user.displayName}</p>
                 <p className="truncate text-xs text-muted">{user.email}</p>
               </motion.div>
@@ -161,6 +167,8 @@ export function AppShell({ children, user, pendingInviteCount = 0 }: AppShellPro
           user={user}
           isSigningOut={isSigningOut}
           onSignOut={handleSignOut}
+          notifications={notifications}
+          unreadNotificationCount={unreadNotificationCount}
         />
         <main className="min-h-[calc(100vh-64px)] p-6 lg:p-8">{children}</main>
       </motion.div>
@@ -172,6 +180,8 @@ export function AppShell({ children, user, pendingInviteCount = 0 }: AppShellPro
           user={user}
           isSigningOut={isSigningOut}
           onSignOut={handleSignOut}
+          notifications={notifications}
+          unreadNotificationCount={unreadNotificationCount}
         />
         <main className="min-h-[calc(100vh-64px)] p-4">{children}</main>
         <MobileNavigation pathname={pathname} pendingInviteCount={pendingInviteCount} />
@@ -186,9 +196,19 @@ type TopbarProps = {
   user: AppShellProps['user']
   isSigningOut: boolean
   onSignOut: () => void
+  notifications: NotificationItem[]
+  unreadNotificationCount: number
 }
 
-function Topbar({ theme, toggleTheme, user, isSigningOut, onSignOut }: TopbarProps) {
+function Topbar({
+  theme,
+  toggleTheme,
+  user,
+  isSigningOut,
+  onSignOut,
+  notifications,
+  unreadNotificationCount,
+}: TopbarProps) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b-[length:var(--border-width)] border-border bg-background/90 px-4 backdrop-blur-md sm:px-6">
       <div>
@@ -200,6 +220,7 @@ function Topbar({ theme, toggleTheme, user, isSigningOut, onSignOut }: TopbarPro
 
       <div className="flex items-center gap-2 sm:gap-3">
         <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+        <NotificationCenter notifications={notifications} unreadCount={unreadNotificationCount} />
         <Avatar src={user.avatarUrl} alt={user.displayName} fallback={user.displayName} size="sm" />
         <Button
           variant="ghost"

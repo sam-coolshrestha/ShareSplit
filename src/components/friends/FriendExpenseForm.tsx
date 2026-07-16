@@ -7,11 +7,18 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
+import {
+  CustomSplitPanel,
+  type CustomSplitMode,
+  type CustomSplitValue,
+  type Member,
+} from '@/components/groups/CustomSplitPanel'
+import { ItemizedSplitPanel, type ItemizedLineItem } from '@/components/groups/ItemizedSplitPanel'
+import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
-import { SplitTabs } from '@/components/expenses/SplitTabs'
 import { createClient } from '@/lib/supabase/client'
 
 const friendExpenseSchema = z.object({
@@ -25,15 +32,12 @@ const friendExpenseSchema = z.object({
   paidBy: z.string().uuid('Choose who paid.'),
   date: z.string().min(1, 'Choose a date.'),
   notes: z.string().trim().max(300, 'Keep it under 300 characters.').optional(),
+  selectedMembers: z.array(z.string().uuid()).min(1, 'Select at least one person for this split.'),
 })
 
 type FriendExpenseInput = z.input<typeof friendExpenseSchema>
 type FriendExpenseValues = z.output<typeof friendExpenseSchema>
-
-type FriendMember = {
-  id: string
-  name: string
-}
+type SplitTab = 'equal' | 'custom' | 'itemized'
 
 function splitAmountEvenly(amount: number, memberCount: number) {
   const totalPaise = Math.round(amount * 100)
@@ -51,6 +55,19 @@ function formatCurrency(amount: number, currency: string) {
   }).format(amount)
 }
 
+function toNumber(value: string) {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function isCloseEnough(left: number, right: number) {
+  return Math.abs(Math.round(left * 100) - Math.round(right * 100)) <= 1
+}
+
+function makeItemId() {
+  return `item-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 export function FriendExpenseForm({
   currency,
   friendshipId,
@@ -60,16 +77,25 @@ export function FriendExpenseForm({
   currency: string
   friendshipId: string
   friendName: string
-  members: FriendMember[]
+  members: Member[]
 }) {
   const router = useRouter()
   const [formError, setFormError] = useState<string | null>(null)
-  const [selectedMembers, setSelectedMembers] = useState<string[]>(members.map((m) => m.id))
+  const [splitTab, setSplitTab] = useState<SplitTab>('equal')
+  const [customMode, setCustomMode] = useState<CustomSplitMode>('exact')
+  const [customValues, setCustomValues] = useState<CustomSplitValue[]>(
+    members.map((member) => ({ memberId: member.id, value: '' }))
+  )
+  const [itemizedItems, setItemizedItems] = useState<ItemizedLineItem[]>([
+    { id: makeItemId(), description: '', amount: '', claimedBy: members.map((member) => member.id) },
+  ])
+  const [splitError, setSplitError] = useState<string | null>(null)
 
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FriendExpenseInput, unknown, FriendExpenseValues>({
     resolver: zodResolver(friendExpenseSchema),
@@ -79,27 +105,121 @@ export function FriendExpenseForm({
       paidBy: members[0]?.id ?? '',
       date: new Date().toISOString().slice(0, 10),
       notes: '',
+      selectedMembers: members.map((member) => member.id),
     },
   })
 
   const watchedAmount = watch('amount')
+  const selectedMembers = watch('selectedMembers') ?? []
   const parsedAmount = typeof watchedAmount === 'number' ? watchedAmount : Number.parseFloat(watchedAmount || '0')
-  const equalShare = Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount / members.length : 0
+  const splitMembers = members.filter((member) => selectedMembers.includes(member.id))
+  const equalShare =
+    Number.isFinite(parsedAmount) && splitMembers.length > 0 && parsedAmount > 0
+      ? parsedAmount / splitMembers.length
+      : 0
 
-  const handleMemberToggle = (memberId: string) => {
-    setSelectedMembers((current) =>
-      current.includes(memberId)
-        ? current.filter((id) => id !== memberId)
-        : [...current, memberId]
-    )
+  const setCustomValue = (memberId: string, value: string) => {
+    setCustomValues((current) => current.map((entry) => (entry.memberId === memberId ? { ...entry, value } : entry)))
   }
 
-  const handleSelectAll = () => {
-    setSelectedMembers(members.map((m) => m.id))
+  const fillCustomEqual = () => {
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || !members.length) return
+
+    const values =
+      customMode === 'percentage'
+        ? splitAmountEvenly(100, members.length).map((share) => share.toFixed(2))
+        : splitAmountEvenly(parsedAmount, members.length).map((share) => share.toFixed(2))
+
+    setCustomValues(members.map((member, index) => ({ memberId: member.id, value: values[index] ?? '' })))
+  }
+
+  const updateItem = (itemId: string, updates: Partial<Omit<ItemizedLineItem, 'id'>>) => {
+    setItemizedItems((current) => current.map((item) => (item.id === itemId ? { ...item, ...updates } : item)))
+  }
+
+  const buildCustomShares = (amount: number) => {
+    const shares = customValues
+      .map((entry) => ({
+        memberId: entry.memberId,
+        amount: customMode === 'percentage' ? (amount * toNumber(entry.value)) / 100 : toNumber(entry.value),
+      }))
+      .filter((entry) => entry.amount > 0)
+
+    const enteredTotal = customValues.reduce((sum, entry) => sum + toNumber(entry.value), 0)
+    const expectedTotal = customMode === 'percentage' ? 100 : amount
+
+    if (!shares.length) return { error: 'Enter at least one custom share.', shares: [] as Array<{ memberId: string; amount: number }> }
+    if (!isCloseEnough(enteredTotal, expectedTotal)) {
+      return {
+        error:
+          customMode === 'percentage'
+            ? 'Custom percentages must add up to 100%.'
+            : 'Custom amounts must add up to the expense total.',
+        shares: [] as Array<{ memberId: string; amount: number }>,
+      }
+    }
+
+    return { error: null, shares }
+  }
+
+  const buildItemizedData = (amount: number) => {
+    const preparedItems = itemizedItems.map((item) => ({
+      ...item,
+      amountNumber: toNumber(item.amount),
+      description: item.description.trim(),
+    }))
+
+    if (preparedItems.some((item) => item.description.length < 1 || item.amountNumber <= 0)) {
+      return { error: 'Every line item needs a name and amount greater than zero.', shares: [] as Array<{ memberId: string; amount: number }>, items: [] as typeof preparedItems }
+    }
+
+    if (preparedItems.some((item) => item.claimedBy.length < 1)) {
+      return { error: 'Every line item needs at least one claimant.', shares: [] as Array<{ memberId: string; amount: number }>, items: [] as typeof preparedItems }
+    }
+
+    const itemTotal = preparedItems.reduce((sum, item) => sum + item.amountNumber, 0)
+    if (!isCloseEnough(itemTotal, amount)) {
+      return { error: 'Line item amounts must add up to the expense total.', shares: [] as Array<{ memberId: string; amount: number }>, items: [] as typeof preparedItems }
+    }
+
+    const shareMap = new Map<string, number>()
+    for (const item of preparedItems) {
+      const shares = splitAmountEvenly(item.amountNumber, item.claimedBy.length)
+      item.claimedBy.forEach((memberId, index) => {
+        shareMap.set(memberId, (shareMap.get(memberId) ?? 0) + (shares[index] ?? 0))
+      })
+    }
+
+    return {
+      error: null,
+      shares: Array.from(shareMap, ([memberId, shareAmount]) => ({ memberId, amount: shareAmount })),
+      items: preparedItems,
+    }
   }
 
   const onSubmit = async (values: FriendExpenseValues) => {
     setFormError(null)
+    setSplitError(null)
+
+    const splitType = splitTab === 'equal' ? 'equal' : splitTab === 'itemized' ? 'itemized' : customMode
+    const splitData =
+      splitTab === 'equal'
+        ? {
+            error: null,
+            shares: values.selectedMembers.map((memberId, index) => ({
+              memberId,
+              amount: splitAmountEvenly(values.amount, values.selectedMembers.length)[index] ?? 0,
+            })),
+            items: [] as Array<{ id: string; description: string; amount: string; claimedBy: string[]; amountNumber: number }>,
+          }
+        : splitTab === 'custom'
+          ? { ...buildCustomShares(values.amount), items: [] as Array<{ id: string; description: string; amount: string; claimedBy: string[]; amountNumber: number }> }
+          : buildItemizedData(values.amount)
+
+    if (splitData.error) {
+      setSplitError(splitData.error)
+      return
+    }
 
     const supabase = createClient()
     const {
@@ -122,7 +242,7 @@ export function FriendExpenseForm({
         paid_by: values.paidBy,
         group_id: null,
         friendship_id: friendshipId,
-        split_type: 'equal',
+        split_type: splitType,
         date: values.date,
         notes: values.notes || null,
         created_by: user.id,
@@ -135,12 +255,11 @@ export function FriendExpenseForm({
       return
     }
 
-    const shares = splitAmountEvenly(values.amount, members.length)
     const { error: splitsError } = await supabase.from('expense_splits').insert(
-      members.map((member, index) => ({
+      splitData.shares.map((share) => ({
         expense_id: expense.id,
-        user_id: member.id,
-        amount: shares[index],
+        user_id: share.memberId,
+        amount: share.amount,
       }))
     )
 
@@ -149,9 +268,48 @@ export function FriendExpenseForm({
       return
     }
 
+    if (splitTab === 'itemized' && splitData.items.length) {
+      for (const item of splitData.items) {
+        const { data: expenseItem, error: itemError } = await supabase
+          .from('expense_items')
+          .insert({
+            expense_id: expense.id,
+            description: item.description,
+            amount: item.amountNumber,
+          })
+          .select('id')
+          .single()
+
+        if (itemError || !expenseItem) {
+          setFormError(itemError?.message ?? 'Could not save itemized details.')
+          return
+        }
+
+        const itemShares = splitAmountEvenly(item.amountNumber, item.claimedBy.length)
+        const { error: claimsError } = await supabase.from('item_claims').insert(
+          item.claimedBy.map((memberId, index) => ({
+            item_id: expenseItem.id,
+            user_id: memberId,
+            share_amount: itemShares[index] ?? 0,
+          }))
+        )
+
+        if (claimsError) {
+          setFormError(claimsError.message)
+          return
+        }
+      }
+    }
+
     router.push(`/friends/${friendshipId}`)
     router.refresh()
   }
+
+  const splitTabs: Array<{ id: SplitTab; label: string }> = [
+    { id: 'equal', label: 'Equal' },
+    { id: 'custom', label: 'Custom' },
+    { id: 'itemized', label: 'Itemized' },
+  ]
 
   return (
     <div className="page-shell space-y-7">
@@ -183,6 +341,7 @@ export function FriendExpenseForm({
               error={errors.amount?.message}
               {...register('amount')}
             />
+
             <div>
               <label htmlFor="paidBy" className="mb-2 block font-mono text-xs font-bold uppercase tracking-wider text-foreground">
                 Paid by
@@ -195,7 +354,85 @@ export function FriendExpenseForm({
                 ))}
               </select>
             </div>
+
             <Input label="Date" type="date" error={errors.date?.message} {...register('date')} />
+
+            <div>
+              <label className="mb-2 block font-mono text-xs font-bold uppercase tracking-wider text-foreground">
+                Split type
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {splitTabs.map((tab) => (
+                  <Button
+                    key={tab.id}
+                    type="button"
+                    variant={splitTab === tab.id ? 'primary' : 'secondary'}
+                    className="min-h-11 px-2 text-xs"
+                    onClick={() => {
+                      setSplitTab(tab.id)
+                      setSplitError(null)
+                    }}
+                  >
+                    {tab.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {splitTab === 'equal' ? (
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <label className="block font-mono text-xs font-bold uppercase tracking-wider text-foreground">
+                    Split amongst
+                  </label>
+                  <button
+                    type="button"
+                    className="font-mono text-[0.7rem] font-bold uppercase tracking-wider text-primary"
+                    onClick={() =>
+                      setValue(
+                        'selectedMembers',
+                        members.map((member) => member.id),
+                        { shouldValidate: true }
+                      )
+                    }
+                  >
+                    Select all
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {members.map((member) => {
+                    const checked = selectedMembers.includes(member.id)
+
+                    return (
+                      <label key={member.id} className="theme-card flex cursor-pointer items-center justify-between gap-4 bg-surface-raised px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar alt={member.name} fallback={member.name} size="sm" />
+                          <div>
+                            <p className="text-sm font-bold text-foreground">{member.name}</p>
+                            <p className="font-mono text-[0.625rem] uppercase tracking-widest text-muted">Included in split</p>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          value={member.id}
+                          checked={checked}
+                          className="h-5 w-5 accent-[var(--color-primary)]"
+                          onChange={(event) => {
+                            const nextSelection = event.target.checked
+                              ? [...selectedMembers, member.id]
+                              : selectedMembers.filter((id) => id !== member.id)
+
+                            setValue('selectedMembers', nextSelection, { shouldValidate: true, shouldDirty: true })
+                          }}
+                        />
+                      </label>
+                    )
+                  })}
+                </div>
+                {errors.selectedMembers ? <p className="mt-2 text-xs text-error">{errors.selectedMembers.message}</p> : null}
+              </div>
+            ) : null}
+
             <div>
               <label htmlFor="notes" className="mb-2 block font-mono text-xs font-bold uppercase tracking-wider text-foreground">
                 Notes
@@ -209,11 +446,13 @@ export function FriendExpenseForm({
                 {...register('notes')}
               />
             </div>
+
             {formError ? (
               <p className="border-[length:var(--border-width)] border-error bg-surface-raised px-3 py-2 text-sm text-error">
                 {formError}
               </p>
             ) : null}
+
             <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
               <Button asChild variant="secondary" className="w-full sm:w-auto">
                 <Link href={`/friends/${friendshipId}`}>Cancel</Link>
@@ -225,14 +464,73 @@ export function FriendExpenseForm({
           </form>
         </Card>
 
-        <SplitTabs
-          members={members}
-          totalAmount={parsedAmount || 0}
-          currency={currency}
-          selectedMembers={selectedMembers}
-          onMemberToggle={handleMemberToggle}
-          onSelectAll={handleSelectAll}
-        />
+        <Card className="overflow-hidden p-0">
+          <div className="border-b-[length:var(--border-width)] border-border bg-surface-raised p-5 sm:p-6">
+            <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">
+              {splitTab === 'equal' ? 'Equal split' : splitTab === 'custom' ? 'Custom split' : 'Itemized split'}
+            </p>
+            <h2 className="mt-3 font-display text-3xl text-foreground">How this will split</h2>
+          </div>
+
+          {splitTab === 'equal' ? (
+            <div className="p-5 sm:p-6">
+              <div className="theme-chip mb-5 inline-flex px-3 py-2 font-mono text-xs font-bold uppercase tracking-widest text-muted-light">
+                {splitMembers.length} selected
+              </div>
+              <div className="space-y-3">
+                {splitMembers.map((member) => (
+                  <div key={member.id} className="theme-card flex items-center justify-between gap-4 bg-surface-raised px-4 py-4">
+                    <div>
+                      <p className="font-label text-sm font-bold text-foreground">{member.name}</p>
+                      <p className="mt-1 font-mono text-[0.625rem] font-bold uppercase tracking-widest text-muted">Equal share</p>
+                    </div>
+                    <p className="font-display text-2xl text-primary">{formatCurrency(equalShare || 0, currency)}</p>
+                  </div>
+                ))}
+                {!splitMembers.length ? (
+                  <div className="theme-card bg-surface-raised px-4 py-6 text-center text-sm text-muted-light">
+                    Pick at least one member to calculate the split preview.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {splitTab === 'custom' ? (
+            <CustomSplitPanel
+              currency={currency}
+              members={members}
+              mode={customMode}
+              values={customValues}
+              totalAmount={Number.isFinite(parsedAmount) ? parsedAmount : 0}
+              error={splitError}
+              onModeChange={(mode) => {
+                setCustomMode(mode)
+                setSplitError(null)
+              }}
+              onValueChange={setCustomValue}
+              onFillEqual={fillCustomEqual}
+            />
+          ) : null}
+
+          {splitTab === 'itemized' ? (
+            <ItemizedSplitPanel
+              currency={currency}
+              items={itemizedItems}
+              members={members}
+              totalAmount={Number.isFinite(parsedAmount) ? parsedAmount : 0}
+              error={splitError}
+              onAddItem={() =>
+                setItemizedItems((current) => [
+                  ...current,
+                  { id: makeItemId(), description: '', amount: '', claimedBy: members.map((member) => member.id) },
+                ])
+              }
+              onRemoveItem={(itemId) => setItemizedItems((current) => current.filter((item) => item.id !== itemId))}
+              onItemChange={updateItem}
+            />
+          ) : null}
+        </Card>
       </div>
     </div>
   )

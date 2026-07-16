@@ -213,7 +213,7 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Group balance</p>
-              <h2 className="mt-3 font-display text-3xl text-foreground">Who owes you, and who you owe</h2>
+              <h2 className="mt-3 font-display text-3xl text-foreground">Net balances</h2>
             </div>
             <Badge variant="primary">{activeBalances.length}</Badge>
           </div>

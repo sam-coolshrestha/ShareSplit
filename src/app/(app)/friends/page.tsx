@@ -6,6 +6,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { createClient } from '@/lib/supabase/server'
+import { describeNetBalance } from '@/lib/utils/balance'
 import { calculateFriendBalances, type FriendExpense, type FriendSettlement } from '@/lib/utils/friend-balances'
 
 type FriendshipRow = {
@@ -51,7 +52,7 @@ export default async function FriendsPage() {
     .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
     .order('created_at', { ascending: false })
 
-  const friendships = ((friendshipRows ?? []) as FriendshipRow[])
+  const friendships = (friendshipRows ?? []) as FriendshipRow[]
 
   const balances = await Promise.all(
     friendships.map(async (friendship) => {
@@ -109,7 +110,7 @@ export default async function FriendsPage() {
             One-to-one balances
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-light sm:text-base">
-            See what each friend owes you or what you owe them across all shared expenses.
+            See the single net balance with each friend after every expense and settlement offsets.
           </p>
         </div>
       </section>
@@ -130,7 +131,7 @@ export default async function FriendsPage() {
           {balances
             .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
             .map((friend) => (
-              <Link key={friend.friendId} href={`/friends/${friend.friendId}`} className="block">
+              <Link key={friend.friendshipId} href={`/friends/${friend.friendshipId}`} className="block">
                 <Card className="p-0">
                   <div className="flex min-h-16 items-center justify-between gap-4 px-4 py-4">
                     <div className="flex items-center gap-3">
@@ -143,13 +144,24 @@ export default async function FriendsPage() {
                       <div>
                         <p className="font-display text-2xl text-foreground">{friend.friendName}</p>
                         <p className="mt-1 text-sm text-muted-light">
-                          {friend.balance > 0
-                            ? `Owes you ${formatCurrency(friend.balance, 'INR')}`
-                            : `You owe ${friend.friendName} ${formatCurrency(Math.abs(friend.balance), 'INR')}`}
+                          {friend.balance === 0
+                            ? `You and ${friend.friendName} are settled up`
+                            : `${describeNetBalance(friend.balance, friend.friendName)} ${formatCurrency(
+                                Math.abs(friend.balance),
+                                'INR'
+                              )}`}
                         </p>
                       </div>
                     </div>
-                    <p className={friend.balance > 0 ? 'font-display text-3xl text-success' : 'font-display text-3xl text-primary'}>
+                    <p
+                      className={
+                        friend.balance > 0
+                          ? 'font-display text-3xl text-success'
+                          : friend.balance < 0
+                            ? 'font-display text-3xl text-primary'
+                            : 'font-display text-3xl text-foreground'
+                      }
+                    >
                       {formatCurrency(Math.abs(friend.balance), 'INR')}
                     </p>
                   </div>
@@ -162,7 +174,6 @@ export default async function FriendsPage() {
           <p className="text-sm text-muted-light">No friendships yet.</p>
         </Card>
       )}
-
     </div>
   )
 }

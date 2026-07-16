@@ -51,8 +51,8 @@ export function calculateMemberBalances(
 
   for (const settlement of settlements) {
     const settlementAmount = toMoney(settlement.amount)
-    balances.set(settlement.payer_id, (balances.get(settlement.payer_id) ?? 0) + settlementAmount)
-    balances.set(settlement.payee_id, (balances.get(settlement.payee_id) ?? 0) - settlementAmount)
+    balances.set(settlement.payer_id, (balances.get(settlement.payer_id) ?? 0) - settlementAmount)
+    balances.set(settlement.payee_id, (balances.get(settlement.payee_id) ?? 0) + settlementAmount)
   }
 
   return Array.from(balances.entries())
@@ -65,4 +65,26 @@ export function calculateMemberBalances(
       if (Math.abs(b.balance) !== Math.abs(a.balance)) return Math.abs(b.balance) - Math.abs(a.balance)
       return a.name.localeCompare(b.name)
     })
+}
+
+export function describeNetBalance(balance: number, otherPersonName: string) {
+  if (Math.abs(balance) < 0.01) {
+    return `You and ${otherPersonName} are settled up`
+  }
+
+  return balance > 0 ? `${otherPersonName} owes you` : `You owe ${otherPersonName}`
+}
+
+export function calculateNetBalanceForUser(
+  currentUserId: string,
+  expenses: BalanceExpense[],
+  settlements: BalanceSettlement[] = []
+) {
+  const balances = calculateMemberBalances(
+    [{ id: currentUserId, name: 'You' }],
+    expenses,
+    settlements
+  )
+
+  return balances.find((balance) => balance.memberId === currentUserId)?.balance ?? 0
 }

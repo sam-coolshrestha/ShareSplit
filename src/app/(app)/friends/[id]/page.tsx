@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { createClient } from '@/lib/supabase/server'
-import { calculateMemberBalances } from '@/lib/utils/balance'
+import { calculateMemberBalances, describeNetBalance } from '@/lib/utils/balance'
 import { simplifyDebts } from '@/lib/utils/debt-simplification'
 
 type FriendPageProps = {
@@ -135,7 +135,6 @@ export default async function FriendDetailPage({ params }: FriendPageProps) {
     settlements
   )
   const yourBalance = balances.find((balance) => balance.memberId === user.id)?.balance ?? 0
-  const friendBalance = balances.find((balance) => balance.memberId === friendId)?.balance ?? 0
   const simplifiedDebts = simplifyDebts(
     balances.map((balance) => ({
       memberId: balance.memberId,
@@ -160,7 +159,7 @@ export default async function FriendDetailPage({ params }: FriendPageProps) {
             <Badge variant="primary">Friend</Badge>
             <h1 className="mt-3 font-display text-4xl leading-none text-foreground sm:text-5xl">{friendName}</h1>
             <p className="mt-3 text-sm leading-6 text-muted-light sm:text-base">
-              Shared expense history and one-to-one balance with this friend.
+              Shared expense history and one net balance with this friend.
             </p>
           </div>
         </div>
@@ -175,29 +174,31 @@ export default async function FriendDetailPage({ params }: FriendPageProps) {
         </div>
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card className="p-5">
-          <p className="label">You owe</p>
-          <p className="mt-3 font-display text-4xl text-primary">{formatCurrency(Math.max(0, -yourBalance), settlementCurrency)}</p>
-        </Card>
-        <Card className="p-5">
-          <p className="label">Owed to you</p>
-          <p className="mt-3 font-display text-4xl text-success">{formatCurrency(Math.max(0, friendBalance), settlementCurrency)}</p>
-        </Card>
-      </div>
-
       <Card priority className="p-5 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="font-mono text-xs font-bold uppercase tracking-[0.18em] text-primary">Net balance</p>
             <h2 className="mt-2 font-display text-3xl text-foreground">
-              {yourBalance >= 0 ? 'They owe you' : 'You owe them'}
+              {describeNetBalance(yourBalance, friendName)}
             </h2>
           </div>
-          <p className={yourBalance >= 0 ? 'font-display text-4xl text-success' : 'font-display text-4xl text-primary'}>
+          <p
+            className={
+              yourBalance > 0
+                ? 'font-display text-4xl text-success'
+                : yourBalance < 0
+                  ? 'font-display text-4xl text-primary'
+                  : 'font-display text-4xl text-foreground'
+            }
+          >
             {formatCurrency(Math.abs(yourBalance), settlementCurrency)}
           </p>
         </div>
+        <p className="mt-3 text-sm text-muted-light">
+          {Math.abs(yourBalance) < 0.01
+            ? 'This friendship is fully settled right now.'
+            : 'Opposite debts are already offset here, so this is the only amount that matters.'}
+        </p>
         <div className="mt-6">
           <FriendshipSettleUpModal
             friendshipId={friendship.id}
@@ -233,7 +234,7 @@ export default async function FriendDetailPage({ params }: FriendPageProps) {
                     <div className="min-w-0 flex-1">
                       <p className="font-display text-2xl text-foreground">{expense.description}</p>
                       <p className="truncate text-sm text-muted-light">
-                        Paid by {payer?.display_name ?? 'Member'} • Added by {creator?.display_name ?? 'Member'} • {formatDate(expense.date)}
+                        Paid by {payer?.display_name ?? 'Member'} | Added by {creator?.display_name ?? 'Member'} | {formatDate(expense.date)}
                       </p>
                     </div>
                     <div className="min-w-20 shrink-0 text-right">

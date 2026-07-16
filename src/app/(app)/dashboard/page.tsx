@@ -1,12 +1,9 @@
 import { redirect } from 'next/navigation'
 
 import { Dashboard } from '@/components/dashboard/Dashboard'
+import { buildExpenseActivityItem, getSingle } from '@/lib/activity'
 import { createClient } from '@/lib/supabase/server'
-
-type ExpenseShareRow = {
-  expense_id: string
-  amount: number | string | null
-}
+import { calculateNetBalanceForUser, type BalanceExpense, type BalanceSettlement } from '@/lib/utils/balance'
 
 type ExpenseRowFromDb = {
   id: string
@@ -14,18 +11,21 @@ type ExpenseRowFromDb = {
   amount: number | string | null
   currency: string
   date: string
+  created_at: string
+  updated_at: string
+  created_by: string
+  paid_by: string
+  notes: string | null
+  group_id: string | null
+  friendship_id: string | null
   groups: { name: string } | { name: string }[] | null
   payer: { display_name: string } | { display_name: string }[] | null
-}
-
-type RecentExpenseRow = {
-  id: string
-  description: string
-  amount: number | string | null
-  currency: string
-  date: string
-  groupName: string
-  payerName: string
+  creator: { display_name: string } | { display_name: string }[] | null
+  expense_splits: Array<{
+    user_id: string
+    amount: number | string | null
+    profile: { display_name: string } | { display_name: string }[] | null
+  }> | null
 }
 
 export default async function DashboardPage() {
@@ -60,17 +60,29 @@ export default async function DashboardPage() {
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
 
-  const { data: shareRows } = await supabase
-    .from('expense_splits')
-    .select('expense_id, amount, expenses!inner(is_deleted)')
-    .eq('user_id', user.id)
-    .eq('expenses.is_deleted', false)
+  const { data: balanceExpenseRows } = await supabase
+    .from('expenses')
+    .select(`
+      amount,
+      paid_by,
+      expense_splits!inner(
+        user_id,
+        amount
+      )
+    `)
+    .eq('expense_splits.user_id', user.id)
+    .eq('is_deleted', false)
 
-  const shareByExpenseId = new Map(
-    ((shareRows ?? []) as ExpenseShareRow[]).map((row) => [row.expense_id, Number(row.amount ?? 0)])
+  const { data: settlementRows } = await supabase
+    .from('settlements')
+    .select('payer_id, payee_id, amount')
+    .or(`payer_id.eq.${user.id},payee_id.eq.${user.id}`)
+
+  const totalBalance = calculateNetBalanceForUser(
+    user.id,
+    (balanceExpenseRows ?? []) as BalanceExpense[],
+    (settlementRows ?? []) as BalanceSettlement[]
   )
-
-  const totalBalance = Array.from(shareByExpenseId.values()).reduce((sum, amount) => sum + amount, 0)
 
   const { data: recentExpenseRows } = await supabase
     .from('expenses')
@@ -80,8 +92,21 @@ export default async function DashboardPage() {
       amount,
       currency,
       date,
+      created_at,
+      updated_at,
+      created_by,
+      paid_by,
+      notes,
+      group_id,
+      friendship_id,
       groups(name),
-      payer:profiles!expenses_paid_by_fkey(display_name)
+      payer:profiles!expenses_paid_by_fkey(display_name),
+      creator:profiles!expenses_created_by_fkey(display_name),
+      expense_splits(
+        user_id,
+        amount,
+        profile:profiles(display_name)
+      )
     `)
     .eq('is_deleted', false)
     .order('date', { ascending: false })
@@ -89,21 +114,35 @@ export default async function DashboardPage() {
     .limit(12)
 
   const recentExpenses = ((recentExpenseRows ?? []) as ExpenseRowFromDb[])
+    .filter((expense) => (expense.expense_splits ?? []).some((split) => split.user_id === user.id))
     .map((expense) => {
-      const group = Array.isArray(expense.groups) ? expense.groups[0] : expense.groups
-      const payer = Array.isArray(expense.payer) ? expense.payer[0] : expense.payer
+      const group = getSingle(expense.groups)
+      const payer = getSingle(expense.payer)
+      const creator = getSingle(expense.creator)
+      const participantNames = new Map(
+        (expense.expense_splits ?? []).map((split) => [
+          split.user_id,
+          getSingle(split.profile)?.display_name ?? 'Member',
+        ])
+      )
 
-      return {
-        id: expense.id,
-        description: expense.description,
-        amount: expense.amount,
-        currency: expense.currency,
-        date: expense.date,
-        groupName: group?.name ?? 'Shared expense',
-        payerName: payer?.display_name ?? 'Member',
-      }
+      return buildExpenseActivityItem(
+        {
+          ...expense,
+          payerName: payer?.display_name ?? 'Member',
+          creatorName: creator?.display_name ?? 'Member',
+          contextName: group?.name ?? null,
+          contextHref: expense.group_id
+            ? `/groups/${expense.group_id}`
+            : expense.friendship_id
+              ? `/friends/${expense.friendship_id}`
+              : '/dashboard',
+          contextLabel: expense.group_id ? 'View group' : expense.friendship_id ? 'View friend' : 'View details',
+          participantNames,
+        },
+        user.id
+      )
     })
-    .filter((expense) => shareByExpenseId.has(expense.id))
     .slice(0, 6)
 
   return (

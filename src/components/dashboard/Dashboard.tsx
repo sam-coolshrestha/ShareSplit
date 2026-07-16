@@ -1,33 +1,20 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { AddExpenseModal } from './AddExpenseModal'
-import { InviteActions } from './InviteActions'
+
+import { ActivityFeed } from '@/components/activity/ActivityFeed'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-
-type ExpenseShareRow = {
-  expense_id: string
-  amount: number | string | null
-}
-
-type RecentExpenseRow = {
-  id: string
-  description: string
-  amount: number | string | null
-  currency: string
-  date: string
-  groupName: string
-  payerName: string
-}
+import { type ActivityItem, formatCurrency } from '@/lib/activity'
+import { AddExpenseModal } from './AddExpenseModal'
+import { InviteActions } from './InviteActions'
 
 type DashboardProps = {
   displayName: string
   totalBalance: number
-  recentExpenses: RecentExpenseRow[]
+  recentExpenses: ActivityItem[]
   invites: Array<{
     id: string
     created_at: string
@@ -37,7 +24,6 @@ type DashboardProps = {
 }
 
 export function Dashboard({ displayName, totalBalance, recentExpenses, invites }: DashboardProps) {
-  const router = useRouter()
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   return (
@@ -70,8 +56,10 @@ export function Dashboard({ displayName, totalBalance, recentExpenses, invites }
             </p>
             <p className="mt-4 max-w-md text-sm leading-6 text-muted-light">
               {totalBalance > 0
-                ? 'Your equal shares are now being tracked from the expenses you are part of.'
-                : 'You are all settled up. New expenses and repayments will update this balance.'}
+                ? 'You are currently owed more than you owe across your shared expenses.'
+                : totalBalance < 0
+                  ? 'You currently owe more than others owe you across your shared expenses.'
+                  : 'You are all settled up. New expenses and repayments will update this balance.'}
             </p>
           </div>
 
@@ -81,13 +69,15 @@ export function Dashboard({ displayName, totalBalance, recentExpenses, invites }
               <p className="font-mono text-[0.625rem] font-bold uppercase tracking-widest text-muted">
                 Status
               </p>
-              <p className="text-sm font-bold text-foreground">{totalBalance > 0 ? 'Owes share' : 'Balanced'}</p>
+              <p className="text-sm font-bold text-foreground">
+                {totalBalance > 0 ? 'Owed to you' : totalBalance < 0 ? 'You owe' : 'Balanced'}
+              </p>
             </div>
           </div>
         </div>
       </Card>
 
-      {invites?.length ? (
+      {invites.length ? (
         <section>
           <div className="mb-5 flex items-center gap-3">
             <Badge variant="error">{invites.length}</Badge>
@@ -132,76 +122,25 @@ export function Dashboard({ displayName, totalBalance, recentExpenses, invites }
             </p>
             <h2 className="mt-2 font-display text-3xl text-foreground">Expenses</h2>
           </div>
-          <a
+          <Link
             href="/activity"
             className="font-mono text-xs font-bold uppercase tracking-wider text-muted-light hover:text-primary"
           >
             View activity
-          </a>
+          </Link>
         </div>
 
-        {recentExpenses.length > 0 ? (
-          <div className="grid gap-4">
-            {recentExpenses.map((expense) => (
-              <Card key={expense.id} className="p-5 sm:p-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-display text-2xl text-foreground">{expense.description}</p>
-                    <p className="mt-2 text-sm text-muted-light">
-                      {expense.groupName} • Paid by {expense.payerName} • {formatDate(expense.date)}
-                    </p>
-                  </div>
-                  <div className="text-left sm:text-right">
-                    <p className="font-mono text-xs font-bold uppercase tracking-widest text-muted">
-                      Your share
-                    </p>
-                    <p className="mt-2 font-display text-3xl text-primary">
-                      {formatCurrency(Number(expense.amount ?? 0), expense.currency)}
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card className="relative overflow-hidden px-5 py-12 text-center sm:px-8 sm:py-16">
-            <div className="comic-halftone pointer-events-none absolute inset-0 opacity-20" />
-            <div className="relative z-10 mx-auto flex max-w-lg flex-col items-center">
-              <div className="theme-chip grid h-20 w-20 place-items-center bg-surface-raised text-primary">
-                <ReceiptIcon className="h-9 w-9" />
-              </div>
-              <h3 className="mt-7 font-display text-3xl text-foreground">No expenses yet</h3>
-              <p className="mt-3 text-sm leading-6 text-muted-light sm:text-base">
-                Your recent shared expenses will appear here after you add your first one.
-              </p>
-              <Button onClick={() => setIsModalOpen(true)} className="mt-7">
-                <PlusIcon className="h-4 w-4" />
-                Add your first expense
-              </Button>
-            </div>
-          </Card>
-        )}
+        <ActivityFeed
+          items={recentExpenses}
+          compact
+          emptyTitle="No expenses yet"
+          emptyDescription="Your recent shared expenses will appear here after you add your first one."
+        />
       </section>
 
       <AddExpenseModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   )
-}
-
-function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 2,
-  }).format(amount)
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(value))
 }
 
 type IconProps = {
@@ -220,14 +159,6 @@ function BalanceIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
       <path d="M4 7h16v12H4zM4 10h16M8 15h3" />
-    </svg>
-  )
-}
-
-function ReceiptIcon({ className }: IconProps) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h4" />
     </svg>
   )
 }

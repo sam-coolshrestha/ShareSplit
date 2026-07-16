@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import type { ReactNode } from 'react'
 
 import { AppShell } from '@/components/layout/AppShell'
+import { buildNotificationItem } from '@/lib/activity'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function AuthenticatedAppLayout({ children }: { children: ReactNode }) {
@@ -24,9 +25,21 @@ export default async function AuthenticatedAppLayout({ children }: { children: R
     .eq('invited_user_id', user.id)
     .eq('status', 'pending')
 
+  const { data: notificationRows } = await supabase
+    .from('notifications')
+    .select('id, type, title, body, link_href, is_read, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(12)
+
+  const notifications = (notificationRows ?? []).map(buildNotificationItem)
+  const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length
+
   return (
     <AppShell
       pendingInviteCount={pendingInviteCount ?? 0}
+      notifications={notifications}
+      unreadNotificationCount={unreadNotificationCount}
       user={{
         displayName:
           profile?.display_name ??

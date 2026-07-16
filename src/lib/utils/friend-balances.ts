@@ -1,4 +1,4 @@
-import type { BalanceExpense, BalanceMember, BalanceSettlement, MemberBalance } from './balance'
+import type { BalanceExpense, BalanceMember, BalanceSettlement } from './balance'
 import { calculateMemberBalances } from './balance'
 
 export type FriendBalance = {
@@ -44,15 +44,12 @@ export function calculateFriendBalances(
     settlements
   )
 
-  const youBalance = balances.find((balance) => balance.memberId === currentUserId)
-  const friendBalance = balances.find((balance) => balance.memberId === friendId)
-  const balance = friendBalance?.balance ?? -(youBalance?.balance ?? 0)
+  const currentUserBalance = balances.find((balance) => balance.memberId === currentUserId)?.balance ?? 0
 
   return {
     friendshipId: `${currentUserId}-${friendId}`,
     friendId,
     friendName,
-    balance,
+    balance: currentUserBalance,
   }
 }
-
